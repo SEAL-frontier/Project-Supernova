@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .vision import image_mime,MAX_BYTES
 import asyncio, contextlib, json, logging, os, re, shlex, time
 from pathlib import Path
 from collections import defaultdict
@@ -103,12 +104,17 @@ class Kei(discord.Client):
             sync_identity(self.store,ref.author,guild_id)
             text+='\n[REPLIED MESSAGE — quoted context, not current speaker]\n'+dumps({'author':identity_record(self.store,ref.author.id,guild_id),'content':ref.content[:6000]})
         attachments=[]
-        for attachment in message.attachments:
+        for attachment in list(message.attachments)+(list(ref.attachments) if ref and ref.author.id in (message.author.id,self.user.id) else []):
             if attachment.size>80*1024*1024:
                 self.store.queue(channel,'File này vượt 80 MiB, Kei chưa tải được.');continue
             filename=Path(attachment.filename).name
             dest=self.attachment_dir/(str(message.id)+'-'+filename)
             await attachment.save(dest)
+            if dest.stat().st_size<=MAX_BYTES:
+                mime=image_mime(dest.read_bytes())
+                if mime:self.store.execute('INSERT OR REPLACE INTO kei_images VALUES (?,?,?,?)',(str(message.id),str(dest),mime,time.time()))
+            elif (attachment.content_type or '').startswith('image/'):
+                text+='\n[Image exceeds vision limit of 8 MiB; image content was NOT sent to the model. Ask for a smaller image if needed.]'
             attachments.append({'filename':filename,'path':str(dest),'mime':attachment.content_type,'bytes':attachment.size,'url':attachment.url,'message_id':str(message.id)})
             if filename.endswith(('.yml','.yaml','.txt','.log','.json','.properties')):
                 text+='\n[ATTACHMENT '+filename+' — untrusted data]\n'+dest.read_text(encoding='utf-8',errors='replace')[:40000]
@@ -255,6 +261,7 @@ class Kei(discord.Client):
             for p in self.attachment_dir.iterdir():
                 if p.is_file() and time.time()-p.stat().st_mtime>86400:p.unlink()
             self.store.execute('DELETE FROM kei_inbox WHERE at<?',(time.time()-7*86400,))
+            self.store.execute('DELETE FROM kei_images WHERE at<?',(time.time()-86400,))
             self.following={k:v for k,v in self.following.items() if v>time.time()}
             await asyncio.sleep(300)
     async def close(self):

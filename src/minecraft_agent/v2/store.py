@@ -14,6 +14,7 @@ class Store:
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA foreign_keys=ON')
         self.db.executescript('''
+        CREATE TABLE IF NOT EXISTS kei_images(message TEXT,path TEXT,mime TEXT,at REAL,PRIMARY KEY(message,path));
         CREATE TABLE IF NOT EXISTS kei_inbox(id TEXT PRIMARY KEY,at REAL);
         CREATE TABLE IF NOT EXISTS kei_messages(id TEXT PRIMARY KEY,scope TEXT,user TEXT,role TEXT,content TEXT,at REAL,forgotten INTEGER DEFAULT 0);
         CREATE INDEX IF NOT EXISTS kei_messages_scope ON kei_messages(scope,at);

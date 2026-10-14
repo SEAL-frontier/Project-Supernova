@@ -14,7 +14,10 @@ class Model:
         body={'model':self.model,'messages':messages,'stream':False,'max_tokens':max_tokens}
         if tools:body.update(tools=tools,tool_choice=tool_choice or 'auto')
         r=await self.http.post('chat/completions',json=body)
-        if r.status_code>=400:raise RuntimeError('9Router HTTP '+str(r.status_code))
+        if r.status_code>=400:
+            image_input=any(isinstance(m.get('content'),list) and any(p.get('type')=='image_url' for p in m['content']) for m in messages)
+            if image_input and r.status_code in (400,415,422):raise RuntimeError('Vision input rejected by provider; image was not read')
+            raise RuntimeError('9Router HTTP '+str(r.status_code))
         d=r.json()
         if not d.get('choices'):raise RuntimeError('Provider returned no choices')
         m=d['choices'][0]['message'];m['role']='assistant'

@@ -1,7 +1,7 @@
 services:
   keys-keys:
     build: .
-    image: keys-keys:2.0.5
+    image: keys-keys:2.0.6
     restart: unless-stopped
     env_file: .env
     volumes:

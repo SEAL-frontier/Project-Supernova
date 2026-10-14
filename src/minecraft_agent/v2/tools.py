@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .verification import console_receipt
 import hashlib, io, json, os, pathlib, re, shlex, time, zipfile, urllib.parse
 import httpx, paramiko, yaml
 from contextvars import ContextVar
@@ -36,7 +37,7 @@ def console_read(command):
     return cmd in ('list','tps','mspt','plugins','version','whitelist list','banlist','spark tps','spark health show','spark health show --memory','spark health show --network') or cmd.startswith(('spark profiler info','spark profiler open','spark profiler start','spark profiler stop','spark profiler cancel'))
 
 def effect_of(name,args):
-    if name in ('inspect','plugin_search','fetch_url','profiler'):return 'read'
+    if name in ('inspect','plugin_search','fetch_url','profiler','web_search'):return 'read'
     if name=='console':return 'read' if console_read(args['command']) else 'change'
     if name=='files':return 'read' if args['action'] in ('read','list') else 'change'
     if name=='remote_shell':return args.get('effect','dangerous')
@@ -139,7 +140,8 @@ class ServerTools:
         emit_progress('command','Minecraft > '+command)
         time.sleep(2)
         r=self.shell(f"n=$(stat -c %s {log}); if [ \"$n\" -lt {offset} ]; then tail -n 150 {log}; else tail -c +{offset+1} {log}; fi")
-        return {'accepted':True,'console_output':r['stdout'],'verified':False,'note':'Check output or separate state query for the requested postcondition.'}
+        receipt=console_receipt(command,r['stdout']) if r['exit_code']==0 else None
+        return {'accepted':True,'console_output':r['stdout'],'verified':bool(receipt),'verification':receipt,'note':'Receipt proves only the stated scope; otherwise perform independent readback.'}
     def do_power(self,action):
         before=self.api('GET','');self.api('POST','/power',{'action':action})
         stopped=False;last=None

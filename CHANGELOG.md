@@ -1,8 +1,20 @@
 # Changelog
 
-Current public version: **2.0.5**. Architecture: **Supernova**.
+Current public version: **2.0.6**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 2.0.6 — Receipts, eyes, and a search bar
+
+- Fixed successful `say`, `msg` and `broadcast` being reported unfinished: fresh server log receipts now count for their actual scope. Sending a message does not mean a player read it.
+- Missing readback now sends the worker back to verify, without repeating completed actions or posting a contradictory success/failure reply.
+- Progress/checklist calls no longer consume the operational tool budget. Reserved finalization permits readback, never extra mutations.
+- Discord image attachments and eligible replied images reach the model as native image inputs. JPEG/PNG/WebP, at most four images per turn, 8 MiB each / 16 MiB total; recent scoped context only, forgotten messages excluded. Provider rejection is explicit.
+- Added semantic automatic search to chat and native `web_search` to the copilot. Auto tries configured Exa/Firecrawl/SearxNG, free Exa MCP, then Bing RSS; results are cached for five minutes and include source URLs.
+- Verified the configured Gemini 3.8 Flash Medium endpoint actually read a Discord screenshot. Keyless search works on the deployed host; provider availability varies.
+- Private regression checks: 58 passing. Public prompt, persona, environment and test placeholders remain blank.
+
+VI: Lệnh đã chạy có log xác nhận thì báo đúng là xong. Thiếu hậu kiểm thì tự kiểm tra tiếp. Kei đọc được ảnh và tự tra web khi cần; chat bình thường vẫn đi đường chat.
 
 ## 2.0.5 — 2026-10-15 — keys-keys goes public
 

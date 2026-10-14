@@ -10,7 +10,7 @@
 
 Actually, her problem. Your server. We got the custody arrangement wrong. 😭
 
-![Version](https://img.shields.io/badge/version-2.0.5-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-2.0.6-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
@@ -332,3 +332,27 @@ Experimental avatar: **Tendou Kei**. Art credit named in the supplied file: **Ma
 *Her problem. Your server. We'll get it right eventually.* 😭
 
 </div>
+
+
+### Eyes and receipts / Có mắt rồi, đỡ báo láo
+
+Send a JPEG, PNG or WebP in a DM, or attach it when mentioning Kei in a server. You can also reply to your own image. Ask what you want her to read; an unexplained file is not permission to install anything. The provider must support OpenAI-compatible `image_url` content. The configured Gemini endpoint was tested with a real screenshot. Limits: four images, 8 MiB per image, 16 MiB total per turn. Images stay local for up to 24 hours; recent image context lasts ten minutes. Set `VISION_ENABLED=0` to disable.
+
+Gửi ảnh trong DM hoặc tag Kei kèm ảnh ở server. Reply ảnh của chính m cũng được. Nói rõ muốn đọc gì; thả một file xuống không có nghĩa là “cài cái này dùm”. Endpoint phải hỗ trợ ảnh. Giới hạn như trên; `VISION_ENABLED=0` để tắt.
+
+Search is selected by the model when a lookup, current facts or documentation is needed. No keyword bingo. Normal greetings and roleplay do not need a trip around the internet. Replies should cite the actual source URLs; if search fails, she says so.
+
+Search do model quyết định khi cần dữ kiện mới hoặc tài liệu. “Yo” không cần tra Google giùm m 😭. Có nguồn thì dẫn link, search lỗi thì nói lỗi.
+
+Optional local `.env` settings (keep your real values out of Git):
+
+```dotenv
+SEARCH_PROVIDER=auto
+# Optional: EXA_API_KEY, FIRECRAWL_API_KEY, SEARXNG_BASE_URL
+# Optional self-hosted Firecrawl: FIRECRAWL_BASE_URL
+VISION_ENABLED=1
+```
+
+`auto` tries configured APIs, [Exa MCP](https://exa.ai/mcp), then keyless Bing RSS. You can select `exa`, `firecrawl`, `searxng`, `exa_mcp` or `bing_rss` explicitly. Public services can block requests; auto falls back, explicit selection reports the failure. [Exa API docs](https://exa.ai/docs/reference/search) and [Firecrawl search docs](https://docs.firecrawl.dev/api-reference/endpoint/search) explain their keys and limits. No paid account is required for the fallback; no paid quota is promised either.
+
+A fresh server echo proves `say`/`msg` was emitted; a broadcast audit line proves the command was processed. Neither proves a human read it. Other changes still need a matching postcondition. If a check is missing, the worker checks again instead of declaring victory and then immediately saying “actually chưa xong”. ts pmo 🥀
