@@ -1,0 +1,22 @@
+.env
+.env.*
+!.env.example
+kei.yaml
+known_hosts
+data/
+backups/
+prompts/*.md
+!prompts/README.md
+# Empty prompt placeholders are tracked; filled local versions use skip-worktree.
+tests/*
+!tests/.gitkeep
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.DS_Store
+Thumbs.db

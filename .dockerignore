@@ -1,0 +1,16 @@
+.git
+.env*
+kei.yaml
+known_hosts
+data
+backups
+prompts
+tests
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+dist
+build
+*.egg-info
+assets

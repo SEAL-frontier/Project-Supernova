@@ -1,0 +1,8 @@
+# Fill the blank values locally. This file contains no real deployment details.
+provider_base: ""
+owner_id: ""
+database: data/kei.db
+persona_file: prompts/persona.md
+# Chat works with an empty registry. Add server profiles/assignments for copilot.
+assignments: {}
+servers: []

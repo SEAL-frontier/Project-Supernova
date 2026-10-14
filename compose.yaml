@@ -1,0 +1,11 @@
+services:
+  keys-keys:
+    build: .
+    image: keys-keys:2.0.5
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./kei.yaml:/app/kei.yaml:ro
+      - ./prompts:/app/prompts:ro
+      - ./data:/app/data
+      - ./known_hosts:/app/known_hosts:ro
