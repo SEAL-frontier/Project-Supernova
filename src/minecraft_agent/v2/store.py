@@ -56,8 +56,10 @@ class Store:
         if limit is not None:query+=' LIMIT ?';args+=(limit,)
         rows=self.rows(query,args)
         return list(reversed(rows)), summary
-    def context(self, scope, user, server=None):
+    def context(self, scope, user, server=None, *, exclude_ids=(), through=None):
         rows, summary=self.history(scope)
+        excluded=set(map(str,exclude_ids))
+        rows=[r for r in rows if r['id'] not in excluded and (through is None or r['at']<=through)]
         scopes=[scope]
         if scope.startswith('dm:'): scopes.append('user:'+str(user))
         if server: scopes.append('server:'+server)

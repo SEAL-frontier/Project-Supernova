@@ -1,8 +1,18 @@
 # Changelog
 
-Current public version: **2.0.6**. Architecture: **Supernova**.
+Current public version: **2.0.7**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 2.0.7 — The user did not press Continue
+
+- Fixed queued Discord chat turns ending on an earlier assistant reply. Current input is now a real final `user` message, once, with its source IDs; it is no longer duplicated inside a system instruction.
+- Conversation snapshots exclude later queued messages and later assistant replies, preventing one batch from consuming another user's future input.
+- Images and the actual current text share the final user message, preserving the intent behind emoji-only and image turns.
+- Earlier assistant claims are not evidence of user words or UI actions. Preserve ordinary emoji reactions instead of inventing continuation requests.
+- 61 private regression checks, including delayed turns, interleaved speakers and multimodal message ordering.
+
+VI: Sửa lỗi Kei tự bảo người dùng bấm Continue khi họ chỉ gửi emoji. Tin thật luôn nằm cuối đúng vai user; tin đang chờ không bị lẫn qua lượt khác. Không đổi persona.
 
 ## 2.0.6 — Receipts, eyes, and a search bar
 

@@ -46,10 +46,12 @@ class Engine:
         if len(available)==1:return available[0]
         if not available:raise PermissionError('Bạn chat với Kei bình thường được, còn copilot cần được assign server trước nhé.')
         raise ValueError('Anh muốn Kei làm trên server nào: '+', '.join(available)+'?')
-    def prompt(self,user,scope,server=None):
+    def prompt(self,user,scope,server=None,message_ids=None):
         persona=persona_prompt(self.cfg,self.db,user)
         role='Requester is the configured owner (matched by user ID). Follow persona addressing rules; do not infer a real name or relationship.' if str(user)==str(self.cfg['owner_id']) else 'Requester is not the configured owner. Follow conversation and persona; do not invent age, gender, or relationships.'
-        context,history=self.db.context(scope,user,server)
+        current=[self.db.one('SELECT at FROM kei_messages WHERE id=? AND scope=?',(str(mid),scope)) for mid in (message_ids or [])]
+        through=max((row['at'] for row in current if row),default=None)
+        context,history=self.db.context(scope,user,server,exclude_ids=message_ids or (),through=through)
         active=self.db.rows("SELECT id,server,goal,status FROM kei_tasks WHERE scope=? AND requester=? AND status IN ('queued','running','waiting','paused','reconcile') ORDER BY at DESC LIMIT 5",(scope,str(user)))
         system=persona+'\nIdentity: '+role+'\nYou may chat with everyone. Host tools are available only via run_copilot after backend assignment checks. Do not report server facts without tool evidence. Do not turn questions/advice/roleplay into mutations. A lag complaint is OBSERVE, not authorization to fix. Routine explicit mutations need no approval. Dangerous actions require requester confirmation. Never expose internal IDs in ordinary replies.\nAssigned servers: '+dumps(self.assigned(user))+'\nCurrent tasks: '+dumps(active)+'\n'+context
         system+='\n'+identity_context(self.db,user,scope)
@@ -63,9 +65,12 @@ class Engine:
             server=None
             try:server=self.select(user,scope)
             except (ValueError,PermissionError):pass
-            history=self.prompt(user,scope,server)
-            history.append({'role':'system','content':'CURRENT TURN: '+text+'\nActual current source IDs: '+dumps(message_ids)+'. Explicit remember/forget requests require memory_action. Never announce an action before backend result. Casual chat must not suggest server administration.'})
-            history+=image_messages(self.db,scope)
+            history=self.prompt(user,scope,server,message_ids)
+            history.append({'role':'system','content':'The final user message is the actual current Discord input. Explicit remember/forget requests require memory_action. Never announce an action before backend result. Casual chat must not suggest server administration. Earlier assistant claims are not evidence of what a user said or clicked. Emoji-only messages and images are valid conversation; never invent button clicks or continuation instructions.'})
+            current_text=text+'\n[source_user_id: '+str(user)+']\n[current_source_message_ids: '+dumps(message_ids)+']'
+            images=image_messages(self.db,scope)
+            content=[{'type':'text','text':current_text}]+images[0]['content'] if images else current_text
+            history.append({'role':'user','content':content})
             response=await self.model.chat(history,[TURN_ROUTER],tool_choice={'type':'function','function':{'name':'route_turn'}})
             calls=response.get('tool_calls') or []
             if len(calls)!=1 or calls[0]['function']['name']!='route_turn':raise ValueError('Provider did not return one valid routing decision')
