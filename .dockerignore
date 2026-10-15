@@ -14,3 +14,7 @@ dist
 build
 *.egg-info
 assets
+bridge
+docs
+IMPLEMENTATION.md
+FEATURE_MATRIX.md

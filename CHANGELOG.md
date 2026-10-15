@@ -1,8 +1,23 @@
 # Changelog
 
-Current public version: **2.0.7**. Architecture: **Supernova**.
+Current public version: **3.0.0-rc.1**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.0.0-rc.1 — Supernova social intelligence
+
+Release candidate. Stable is gated on natural durable social behavior, live Minecraft/plugin/connectors, and clean-clone onboarding.
+
+- Retains the verified 2.x copilot, task ledger, monitoring, vision, search and compact debug.
+- Adds social reply/short reply/reaction/silence, configured and learned aliases, opt-in initiative and group/relationship context. Ambient public participation is disabled by default.
+- Adds additive schema 3, cross-platform identity, provenance-backed episodes/events, six-hour and daily consolidation, 90-day raw retention and scoped forgetting.
+- Adds independent Panel API/session, Wings, SSH/SFTP and Paper bridge capability adapters. Unknown mutations require action-specific postcondition verification.
+- Adds Java 21 / Paper 1.21.11 bridge, authenticated linking, DiscordSRV/AuthMe hooks, native metrics, console/files, receipts and reconnect handling.
+- Adds setup/doctor/server/migrate CLI, private Discord controls, data-only Docker deployment and optional browser image.
+- Default Vietnam timezone is Asia/Ho_Chi_Minh; wizard/user preferences can change it.
+- Rewrites bilingual setup/docs; local personalization and credentials are generated under data/, while public placeholders remain blank.
+
+VI: Đây là nâng cấp cả social, memory, connector và Minecraft, không chỉ thêm mắm vào persona. Chưa đủ ba cửa nghiệm thu thì giữ rc.
 
 ## 2.0.7 — The user did not press Continue
 

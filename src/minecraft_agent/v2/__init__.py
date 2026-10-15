@@ -1,2 +1,2 @@
-"""Production runtime for Kei 2.0.7 (legacy sandbox is not used)."""
-VERSION = "2.0.7"
+"""Verified copilot core, retained by Supernova 3."""
+VERSION = "3.0.0-rc.1"

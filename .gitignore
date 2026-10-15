@@ -20,3 +20,6 @@ build/
 dist/
 .DS_Store
 Thumbs.db
+bridge/target/
+private-checks/
+compose.override.yaml

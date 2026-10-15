@@ -1,0 +1,16 @@
+name: KeysKeysBridge
+version: '${project.version}'
+main: io.keyskeys.bridge.KeysKeysBridge
+api-version: '1.21'
+description: A small Minecraft hand for Supernova. The brain lives elsewhere.
+softdepend: [AuthMe, DiscordSRV]
+commands:
+  kei:
+    description: Chat privately, link Discord, confirm a task, or select debug level
+    usage: /kei <message> | /kei link <code> | /kei confirm <task> | /kei debug off|minimal|advanced
+  keibridge:
+    description: Operator bridge health and read-only self-test
+    permission: keyskeys.bridge.admin
+permissions:
+  keyskeys.bridge.admin:
+    default: op

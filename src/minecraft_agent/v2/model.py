@@ -21,6 +21,8 @@ class Model:
         d=r.json()
         if not d.get('choices'):raise RuntimeError('Provider returned no choices')
         m=d['choices'][0]['message'];m['role']='assistant'
+        # Provider reasoning is neither conversational history nor user-facing debug.
+        for private_key in ('reasoning_content','reasoning','analysis'):m.pop(private_key,None)
         for tc in m.get('tool_calls') or []:
             if tc.get('type')!='function':raise ValueError('Unsupported tool call')
             args=json.loads(tc['function']['arguments'])

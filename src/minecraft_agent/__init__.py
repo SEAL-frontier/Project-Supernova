@@ -1,3 +1,3 @@
 """Minecraft Agent V2 package."""
 
-__version__ = "2.0.7"
+__version__ = "3.0.0-rc.1"

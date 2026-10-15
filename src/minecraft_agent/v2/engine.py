@@ -161,6 +161,8 @@ class Engine:
     def launch(self,k):
         self.progress.start(k)
         if k not in self.workers or self.workers[k].done():self.workers[k]=asyncio.create_task(self.run(k))
+    def extra_tools(self):return []
+    def completion_missing(self,actions):return missing_verification(actions)
     async def run(self,k):
         task=self.db.one('SELECT * FROM kei_tasks WHERE id=?',(k,))
         if not task:return
@@ -188,10 +190,10 @@ class Engine:
             plan_tool=tool('update_plan','Update persistent plan after new evidence. Include inspection, action and independent verification steps.',{'steps':{'type':'array','items':S}},['steps'])
             progress_tool=tool('update_progress','Update the visible checklist, not hidden reasoning. step is zero-based in the current plan. Mark running before work, done only after evidence. Never claim a skipped or failed step is done. This tool reports progress only; it does not execute or verify anything.',{'step':{'type':'integer'},'state':choices('running','done','skipped'),'note':S},['step','state'])
             clarification=tool('ask_requester','Ask for a missing requirement; no action is performed until the user answers.',{'question':S},['question'])
-            tools=DEFINITIONS+[SEARCH_TOOL,final_tool,plan_tool,progress_tool,clarification]
+            tools=DEFINITIONS+[SEARCH_TOOL,final_tool,plan_tool,progress_tool,clarification]+self.extra_tools()
             plan=json.loads(task['plan']);simple=isinstance(plan,dict) and plan.get('complexity')=='simple'
             if simple:
-                tools=[t for t in tools if t['function']['name'] in ('inspect','console','power','files','finish_task','ask_requester','update_progress','web_search')]
+                tools=[t for t in tools if t['function']['name'] in ('inspect','console','power','files','finish_task','ask_requester','update_progress','web_search','verify_action')]
                 history.append({'role':'system','content':'This is a SIMPLE task. Use a direct typed adapter, then finish with factual Vietnamese output. No deep investigation or unrelated operations.'})
             start=time.monotonic();calls=0
             mutated=bool(self.db.one("SELECT id FROM kei_actions WHERE task=? AND effect!='read'",(k,)))
@@ -234,9 +236,9 @@ class Engine:
                         if name not in ('finish_task','update_plan','update_progress','ask_requester'):calls+=1
                         if name=='finish_task':
                             evidence=args.get('evidence',[])
-                            actions=self.db.rows('SELECT * FROM kei_actions WHERE task=?',(k,))
+                            actions=self.db.rows('SELECT * FROM kei_actions WHERE task=? ORDER BY rowid',(k,))
                             succeeded=bool(args.get('success')) and bool(evidence) and any(a['status']=='done' for a in actions)
-                            missing=missing_verification(actions)
+                            missing=self.completion_missing(actions)
                             succeeded=succeeded and not missing
                             if args.get('success') and missing:
                                 history.append({'role':'tool','tool_call_id':call['id'],'content':dumps({'finished':False,'missing_readback':missing,'instruction':'Perform the missing readback, then finish. Do not repeat already executed actions.'})})
@@ -320,6 +322,7 @@ class Engine:
         tail=result.get('console_output') or result.get('stdout') or result.get('stderr')
         if tail:self.progress.event(k,'log','\n'+str(tail)[-1000:])
         elif result.get('data'):self.progress.event(k,'log','\n'+dumps(result['data'])[-1000:])
+        result['action_id']=action_id
         self.db.execute('UPDATE kei_actions SET status=?,result=? WHERE id=?',(status,dumps(result),action_id))
         return result
     async def memory_review(self,scope):

@@ -18,12 +18,12 @@ def console_receipt(command,output):
     return None
 
 def missing_verification(actions):
-    changed=[a for a in actions if a['effect']!='read' and a['status']=='done']
     missing=[]
-    for a in changed:
+    for index,a in enumerate(actions):
+        if a['effect']=='read' or a['status']!='done':continue
         try:result=json.loads(a['result'] or '{}')
         except ValueError:result={}
         if result.get('verified') is True and (a['tool']!='console' or result.get('verification')):continue
-        later=[r for r in actions if r['effect']=='read' and r['status']=='done' and r['at']>a['at']]
+        later=[r for r in actions[index+1:] if r['effect']=='read' and r['status']=='done']
         if not later:missing.append({'action_id':a['id'],'tool':a['tool'],'args':json.loads(a['args'])})
     return missing

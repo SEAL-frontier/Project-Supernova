@@ -1,0 +1,2 @@
+FROM keys-keys:3.0.0-rc.1
+RUN pip install --no-cache-dir 'playwright>=1.48,<2' && playwright install --with-deps chromium

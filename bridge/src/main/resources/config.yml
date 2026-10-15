@@ -1,0 +1,5 @@
+# Generated pairing config is available from: keys-keys server add --kind bridge
+server-id: ''
+endpoint: ''
+token: ''
+triggers: [kei]
