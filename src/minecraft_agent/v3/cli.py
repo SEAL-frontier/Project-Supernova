@@ -450,7 +450,8 @@ async def doctor_async(cfg, offline=False):
                     await asyncio.to_thread(executor.panel.server, "GET", "")
                     note(p["id"] + "/panel", True, "read actual selected server")
                 elif kind == "wings":
-                    await asyncio.to_thread(executor.api, "GET", "")
+                    wings_only = HybridTools(dict(p, connectors={"wings": connector}), store)
+                    await asyncio.to_thread(wings_only.api, "GET", "")
                     note(p["id"] + "/wings", True, "read actual daemon state")
                 elif kind == "ssh":
                     r = await asyncio.to_thread(executor.shell, "printf kei-ssh-ready", sudo=False)

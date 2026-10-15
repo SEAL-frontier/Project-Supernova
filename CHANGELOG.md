@@ -15,6 +15,8 @@ Release candidate. Stable is gated on natural durable social behavior, live Mine
 - Adds Java 21 / Paper 1.21.11 bridge, authenticated linking, DiscordSRV/AuthMe hooks, native metrics, console/files, receipts and reconnect handling.
 - Adds setup/doctor/server/migrate CLI, private Discord controls, data-only Docker deployment and optional browser image.
 - Default Vietnam timezone is Asia/Ho_Chi_Minh; wizard/user preferences can change it.
+- Bounded memory batches resume backlog without losing same-time messages; offline Minecraft replies fall back to a linked DM.
+- Acceptance: 120 private regression checks, real-model memory replay, live Minecraft/Panel checks and automated interactive clean-clone setup. Sustained social acceptance remains open, so this is a prerelease.
 - Rewrites bilingual setup/docs; local personalization and credentials are generated under data/, while public placeholders remain blank.
 
 VI: Đây là nâng cấp cả social, memory, connector và Minecraft, không chỉ thêm mắm vào persona. Chưa đủ ba cửa nghiệm thu thì giữ rc.

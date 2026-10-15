@@ -1,15 +1,20 @@
-# Bring your own personality
+# Bring your own personality / Tự viết tính cách
 
-The four `.md` prompt files are intentionally zero bytes in the public repository. Fill `persona.md` locally; optionally fill `persona-auto.md`, `persona-soft.md`, and `persona-spicy.md` for `/persona` modes. An empty mode file falls back to your base `persona.md`.
+The public persona files are intentionally empty. For 3.x, run `keys-keys setup`:
+the wizard writes your private `data/persona.md`, leaving these tracked files untouched.
+Optional `data/persona-auto.md`, `data/persona-soft.md` and `data/persona-spicy.md`
+select voices through `/persona`; an empty mode falls back to the base persona.
+Existing installations can keep their configured `persona_file` and private variants.
 
-Write the voice, language/addressing, roleplay boundaries, how teasing should work, and how to respond to emotional or serious situations. The experiment's built-in reply/UI language currently defaults to Vietnamese; the agent's operational contracts are implemented in code, not in these blank customization files.
+Write a voice, language, addressing style, interests and boundaries. Decide how light
+teasing works and when to be gentle or serious. Do not force a catchphrase into every
+reply. Relationship context should guide tone without making people earn help by
+appeasing the character. Permissions and task verification live in code.
 
-The backend owns assignment checks, confirmation and verification. A personality prompt does not grant server access. If you enable playful refusal, it must keep new nonurgent work unexecuted, let a polite request resume it, and never block emergencies or ongoing work.
+VI: Wizard tạo persona riêng trong `data/`. M viết một câu trước cũng được, sửa sau.
+Muốn tsundere thì thêm nét bướng và quan điểm riêng; đừng biến mọi câu trả lời thành
+một bài thi xin lỗi nhân vật. Server đang cháy thì chữa cháy trước đã. 😭
 
-For a local private deployment, mark filled prompt files skip-worktree after editing:
-
-```sh
-git update-index --skip-worktree prompts/persona.md prompts/persona-auto.md prompts/persona-soft.md prompts/persona-spicy.md
-```
-
-Check staged files before pushing; `.gitignore` cannot hide changes to an already tracked placeholder.
+Private prompts, tokens and tests do not belong in a commit. Older deployments that
+filled tracked placeholders can keep `git update-index --skip-worktree` locally;
+always inspect staged changes because `.gitignore` does not protect tracked files.

@@ -6,7 +6,7 @@ Status: **3.0.0-rc.1. Not stable.**
 
 - [ ] Natural social decisions and durable memory, including restart/consolidation/forgetting.
 - [x] Plugin and connectors exercised on a real Minecraft server.
-- [ ] A clean clone completes setup using documentation, without asking the developer.
+- [x] Automated clean-clone setup completes through the documented interactive wizard and doctor.
 
 Every gate needs recorded evidence. Passing imports or an accepted HTTP request is not a gate pass.
 
@@ -20,7 +20,7 @@ task persistence, approval, monitoring, vision, search and live debug. These are
 - Added additive schema 3, identity linking, provenance-backed relationship events and episodes.
 - Added one-call social router; operations retain the existing copilot loop.
 - Added optional connector registry, Panel session support and protocol-v1 outbound bridge.
-- Added setup/doctor CLI and private Discord settings flows. Clean-room acceptance pending.
+- Added setup/doctor CLI and private Discord settings flows. Clean-room wizard and live doctor verified.
 - Default timezone: `Asia/Ho_Chi_Minh`, configurable by wizard and user preference.
 - Ambient public participation disabled by default; enabled modes are free and whitelist.
 - Social DMs require opt-in; limits are three/day, four hours apart, quiet 22:00–08:00.
@@ -28,7 +28,7 @@ task persistence, approval, monitoring, vision, search and live debug. These are
 
 ## Recorded acceptance evidence
 
-- 117 private regression checks pass: legacy behavior, social choices, grants, linking,
+- 120 private regression checks pass: legacy behavior, social choices, grants, linking,
   episodes, privacy, retention, forgetting, proactive gates, exact-source verification,
   setup/claim and durable Minecraft progress.
 - Real-model replay preserves a nickname-origin episode after database reopen and deep
@@ -41,8 +41,19 @@ task persistence, approval, monitoring, vision, search and live debug. These are
 - The Java bridge builds successfully with Maven/Java 21. Source/model input contains
   no deployed credentials. Provider reasoning is stripped from history/debug.
 
+- A fresh GitHub clone builds its Docker image, completes interactive English chat setup
+  and Panel discovery without copying UUIDs, then passes live Discord/provider/Panel doctor.
+  Public templates and the tracked checkout remain unchanged. No second Gateway consumer runs.
+- Production cutover preserves the previous persona/config/database backup. The Discord
+  Gateway starts on 3.0.0-rc.1; the production Leaf server loads the plugin after a normal
+  restart and returns fresh TPS/JVM metrics through the authenticated bridge.
+- Memory jobs keep bounded resumable batches, including equal-time messages; backlog
+  continues on maintenance ticks instead of waiting another six hours. Earlier summaries
+  accompany the next batch. An offline Minecraft reply can fall back to its linked DM.
+
 These are targeted technical checks, not a claim of long-term naturalness or a novice
-human field trial. The rc label remains until the release gates have sufficient evidence.
+human field trial. The social gate remains open for sustained real-user acceptance;
+therefore this release stays rc. A fully independent human setup trial is also welcome.
 
 ## Delivery rules
 

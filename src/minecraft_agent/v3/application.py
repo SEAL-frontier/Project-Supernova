@@ -57,9 +57,18 @@ class MinecraftDestination:
             ident = view.children[0].custom_id.split(":")[-1]
             text += "\n/kei confirm " + ident
         if text:
-            await self.bot.bridge.send(
+            result = await self.bot.bridge.send(
                 self.server, self.uuid, text, self.visibility == "public" and not view
             )
+            if result.get("delivered") is False:
+                person = self.bot.engine.identity.resolve("minecraft", self.uuid, self.server)
+                discord_id = self.bot.engine.identity.discord(person)
+                if not discord_id:
+                    raise ConnectionError("Minecraft player offline; reply was not delivered")
+                destination = await self.bot.destination(discord_id)
+                await destination.send(
+                    text, allowed_mentions=discord.AllowedMentions.none(), view=view
+                )
         return MinecraftMessage(self, str(int(uid(), 16)))
 
     async def fetch_message(self, ident):

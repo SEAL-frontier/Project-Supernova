@@ -459,14 +459,32 @@ class Memory:
             "last_run": 0,
         }
         now = time.time()
-        if not deep and now - job["last_run"] < self.cfg["memory"]["incremental_hours"] * 3600:
+        state = json.loads(job.get("state", "{}"))
+        if (
+            not deep
+            and not state.get("pending")
+            and now - job["last_run"] < self.cfg["memory"]["incremental_hours"] * 3600
+        ):
             return
         rows = self.db.rows(
-            "SELECT id,user,role,content,at FROM kei_messages WHERE scope=? AND forgotten=0 AND at>? ORDER BY at LIMIT 80",
-            (scope, job["cursor"]),
+            "SELECT rowid AS seq,id,user,role,content,at FROM kei_messages WHERE scope=? AND forgotten=0 AND (at>? OR (at=? AND rowid>?)) ORDER BY at,rowid LIMIT 81",
+            (scope, job["cursor"], job["cursor"], state.get("cursor_rowid", 0)),
         )
         if not rows:
             return
+        pending = len(rows) > 80
+        rows = rows[:80]
+        # Keep each request bounded and valid JSON; defer overflow instead of dropping it.
+        bounded, size = [], 0
+        for row in rows:
+            row = dict(row, content=row["content"][:2000])
+            cost = len(dumps(row))
+            if bounded and size + cost > 40000:
+                pending = True
+                break
+            bounded.append(row)
+            size += cost
+        rows = bounded
         authors = {
             r["user"]: self.identity.person_for_user(r["user"]) for r in rows if r["role"] == "user"
         }
@@ -544,8 +562,14 @@ class Memory:
                             "authors": authors,
                             "messages": rows,
                             "known": known,
+                            "previous_summary": (
+                                self.db.one(
+                                    "SELECT content FROM kei_summaries WHERE scope=?", (scope,)
+                                )
+                                or {}
+                            ).get("content", "")[:12000],
                         }
-                    )[:70000],
+                    ),
                 },
             ],
             [definition],
@@ -594,5 +618,11 @@ class Memory:
                 ),
             )
         self.db.execute(
-            "INSERT OR REPLACE INTO kei_jobs VALUES (?,?,?,?)", (key, rows[-1]["at"], now, "{}")
+            "INSERT OR REPLACE INTO kei_jobs VALUES (?,?,?,?)",
+            (
+                key,
+                rows[-1]["at"],
+                now,
+                dumps({"pending": pending, "cursor_rowid": rows[-1]["seq"]}),
+            ),
         )

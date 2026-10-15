@@ -600,8 +600,12 @@ class Engine(LegacyEngine):
                 local = datetime.now(tz)
                 key = "daily-date:" + scope
                 last = self.db.one("SELECT value FROM kei_meta WHERE key=?", (key,))
+                daily_job = self.db.one(
+                    "SELECT state FROM kei_jobs WHERE key=?", ("daily:" + scope,)
+                )
+                pending = bool(daily_job and json.loads(daily_job["state"]).get("pending"))
                 if local.hour >= self.cfg["memory"]["daily_hour"] and (
-                    not last or last["value"] != local.date().isoformat()
+                    pending or not last or last["value"] != local.date().isoformat()
                 ):
                     await self.memory.consolidate(scope, deep=True)
                     self.db.execute(
