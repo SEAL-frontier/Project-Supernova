@@ -1,6 +1,6 @@
 # Supernova 3.0 implementation and acceptance
 
-Status: **3.0.0-rc.1. Not stable.**
+Status: **3.0.0-rc.2. Not stable.**
 
 ## Release gates
 
@@ -28,7 +28,7 @@ task persistence, approval, monitoring, vision, search and live debug. These are
 
 ## Recorded acceptance evidence
 
-- 120 private regression checks pass: legacy behavior, social choices, grants, linking,
+- 121 private regression checks pass: legacy behavior, social choices, grants, linking,
   episodes, privacy, retention, forgetting, proactive gates, exact-source verification,
   setup/claim and durable Minecraft progress.
 - Real-model replay preserves a nickname-origin episode after database reopen and deep
@@ -54,6 +54,13 @@ task persistence, approval, monitoring, vision, search and live debug. These are
 These are targeted technical checks, not a claim of long-term naturalness or a novice
 human field trial. The social gate remains open for sustained real-user acceptance;
 therefore this release stays rc. A fully independent human setup trial is also welcome.
+
+## rc.2 backend patch
+
+Concurrent scoped forgetting invalidates a pending model consolidation before any
+summary, group profile or memory update is persisted. A deferred-response regression
+covers the race. The rc.1 bridge stays protocol-compatible and needs no server restart.
+The clean-clone acceptance was run on rc.1; rc.2 leaves that CLI flow unchanged.
 
 ## Delivery rules
 

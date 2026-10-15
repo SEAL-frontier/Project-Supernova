@@ -10,7 +10,7 @@
 
 Actually, her problem. Your server. We got the custody arrangement wrong. 😭
 
-![Version](https://img.shields.io/badge/version-3.0.0--rc.1-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-3.0.0--rc.2-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
@@ -176,7 +176,7 @@ không có chuyện 200 OK xong tự phong chiến thắng.
 
 ### Version và giới hạn
 
-**3.0.0-rc.1 chưa phải stable.** Ba cửa nghiệm thu ở đầu README phải có bằng chứng.
+**3.0.0-rc.2 chưa phải stable.** Ba cửa nghiệm thu ở đầu README phải có bằng chứng.
 Xem [feature matrix](FEATURE_MATRIX.md), [implementation log](IMPLEMENTATION.md) và
 [changelog](CHANGELOG.md); không lấy một bài test mock làm bằng chứng server thật.
 

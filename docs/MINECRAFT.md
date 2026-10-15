@@ -15,6 +15,8 @@ waiting for a model to finish its sentence.
 Target: Paper API 1.21.11, including the Leaf deployment used for acceptance. Other versions
 and Folia are not implied by that target; verify compatibility before deployment.
 
+Backend rc.2 uses the same protocol-v1 / rc.1 JAR. Updating only the Python backend does not require restarting Minecraft.
+
 ## Network
 
 The plugin opens an outbound WebSocket to the bot, for example

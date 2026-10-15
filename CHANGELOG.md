@@ -1,8 +1,17 @@
 # Changelog
 
-Current public version: **3.0.0-rc.1**. Architecture: **Supernova**.
+Current public version: **3.0.0-rc.2**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.0.0-rc.2 — Forget means forget, even mid-consolidation
+
+- A user forgetting a source invalidates in-flight consolidation before it can write an old summary or group profile back into memory.
+- Adds a concurrent-forgetting regression; 121 private checks pass.
+- Backend-only patch. The compatible protocol-v1 bridge stays at 3.0.0-rc.1; no Minecraft restart is needed.
+- The clean-clone wizard/doctor flow and release gates from rc.1 remain applicable. Sustained social acceptance is still open.
+
+VI: Bấm quên giữa lúc Kei đang tổng hợp thì kết quả cũ bị bỏ, không được nhớ lại từ cửa sau.
 
 ## 3.0.0-rc.1 — Supernova social intelligence
 

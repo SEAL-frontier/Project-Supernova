@@ -371,6 +371,11 @@ class Memory:
         )
 
     def forget(self, user, scope=None, ids=None):
+        generation = self.db.one("SELECT value FROM kei_meta WHERE key='memory-forget-generation'")
+        self.db.execute(
+            "INSERT OR REPLACE INTO kei_meta VALUES (?,?)",
+            ("memory-forget-generation", str(int((generation or {}).get("value", "0")) + 1)),
+        )
         person = self.identity.person_for_user(user)
         targets = set(ids or [])
         sources = set()
@@ -547,6 +552,7 @@ class Memory:
             },
             ["items", "supersede_ids", "summary"],
         )
+        generation = self.db.one("SELECT value FROM kei_meta WHERE key='memory-forget-generation'")
         response = await self.model.chat(
             [
                 {
@@ -576,6 +582,10 @@ class Memory:
             tool_choice={"type": "function", "function": {"name": "memory_pass"}},
             max_tokens=5000,
         )
+        if generation != self.db.one(
+            "SELECT value FROM kei_meta WHERE key='memory-forget-generation'"
+        ):
+            return  # A concurrent forget invalidates summaries/group updates as well as facts.
         calls = response.get("tool_calls") or []
         if len(calls) != 1:
             return
