@@ -3,6 +3,19 @@
 import re
 
 
+def chat_chunks(text, limit=2000):
+    """Compact conversation text without splitting messages on spaces/newlines."""
+    output=[];fenced=False;blank=False
+    for line in str(text or '').strip().splitlines():
+        if line.lstrip().startswith('```'):fenced=not fenced
+        if not fenced and not line.strip():
+            if blank:continue
+            blank=True
+        else:blank=False
+        output.append(line if fenced else line.rstrip())
+    return chunks('\n'.join(output),limit)
+
+
 def chunks(text, limit=2000):
     text = str(text or "").strip()
     if not text:

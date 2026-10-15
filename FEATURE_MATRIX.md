@@ -1,4 +1,4 @@
-# Supernova 3.1.0-rc.2 — feature matrix
+# Supernova 3.1.0-rc.3 — feature matrix
 
 Implemented = a code path with evidence. Partial = an important acceptance gap remains. This is a prerelease; transport mocks are not production proof.
 
@@ -17,7 +17,7 @@ Implemented = a code path with evidence. Partial = an important acceptance gap r
 | Custom stable ranks and private profiles | Implemented | Multi-day thresholds, 24h hysteresis, infrequent -# notices, self-only UI | Starts Neutral; intimacy requires opt-in and evidence; no privilege coupling |
 | Episodic memory, reflection, forgetting | Implemented | Source excerpts, origin/resolution, FTS, atomic cursor, tombstones | Multi-day tests pass; multi-week field evidence remains open |
 | Group intelligence | Partial | Observed participants/activity and sourced social observations | Not a complete social graph; no inferred motives as facts |
-| Proactive conversation | Partial | Opt-in DMs, quiet hours, caps and unanswered suppression | Reasons mainly commitments/episodes; general public initiative deferred |
+| Proactive conversation | Partial | Opt-in, relationship-adaptive caps, actual topics and contact-more/less preferences; bounded gentle followup | Field acceptance pending; unsolicited public participation removed |
 | /setup and /settings | Implemented | Guided private UI, early private acknowledgments, safe error replies; CLI and real HTTP integration | Independent novice installation and another human slash-command check still needed |
 | Delegated administrators | Implemented | Owner-issued revocable server scopes, grantor/history; host-shell gate also covers verification | General SSH requires operator or static host_admins; server/rank/UI profiles cannot grant it |
 | Responsive OAuth dashboard | Implemented | Real Discord OAuth login on production, configured operator identity, assigned server and self profile; desktop/mobile UI | Independent novice installation remains a separate gate |
@@ -39,3 +39,22 @@ Actual recent Discord DM/public/reply/webhook messages, five feedback entries, t
 The plugin was verified by matching the built/installed SHA256 and live connection logs, then the new distributable was tested independently on real Leaf. A scheduled agent read the actual server, reached the existing completion path and reopened without duplicate task/occurrence. Search counters and structured TPS fallback were checked against real responses. Slow tick maxima remain visible.
 
 OAuth contract tests use a fixture issuer. Production acceptance additionally completed real Discord consent, callback and authenticated dashboard reads for the configured operator; the assigned server and private profile loaded without changing settings. This is not an independent novice trial. Private acceptance measurements stays outside the public distribution; ordinary copilot action audit remains included.
+
+## rc.3 feedback delta
+
+| Improvement | Status | Evidence and boundary |
+| --- | --- | --- |
+| Current-state minor/major notices | Implemented | Sourced dimension deltas, label-preserving category hysteresis, private regressions; no fabricated retroactive rank or Discord test spam |
+| Additive custom instructions | Implemented | Chat + private modal + Web, user-level prompt context, self-only storage and forgetting; cannot authorize tools |
+| DM sends and line-break bubbles | Implemented | Bounded DM historical targets, normal sends by default, compact Markdown and mini notes |
+| Searchable memory library | Implemented | Self-only paginated endpoint, original excerpts, tombstone filtering and local HTTP/UI checks |
+| Accessible setup/access dashboard | Implemented | Three-step setup, roster with effective permissions, display identities, mobile navigation; independent novice usability remains to be observed |
+| Long-term natural social behavior | Partial | Actual conversations inspected; further real daily use required, not established by one release |
+
+| 16 October delta | Status | Evidence / limitation |
+| --- | --- | --- |
+| Public trigger/followup isolation | Implemented | Per-person aliases, bystander invalidation, two-candidate cap, no ambient entry path; redacted multi-user regressions |
+| Host scope and approval profiles | Implemented | Atomic owner-issued policy, scoped host checks, runtime rechecks, logged auto-review and revoke regressions; Minecraft-only is a typed tool boundary, not a kernel sandbox |
+| Panel power signal translation | Implemented | Confirmed wrong payload in source and real failed action history; transport regression validates exact schema; real offline-to-running Panel start and bridge reconnection observed; fresh startup marker handles noisy logs |
+
+Actual Panel validation probe returned HTTP 422 with `The signal field is required.` without issuing a valid power command. Current server state read back as running. Social credit regressions cover operational-noise starvation and distinct same-session apology/conflict updates.

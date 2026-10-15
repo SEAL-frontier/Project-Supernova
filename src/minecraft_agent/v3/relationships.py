@@ -24,6 +24,9 @@ def install(store):
       id TEXT PRIMARY KEY,person TEXT,scope TEXT,old_label TEXT,label TEXT,category TEXT,
       reason TEXT,sources TEXT,at REAL,notification TEXT DEFAULT 'pending');
     CREATE TABLE IF NOT EXISTS kei_relationship_preferences(person TEXT PRIMARY KEY,settings TEXT);
+    CREATE TABLE IF NOT EXISTS kei_social_moods(person TEXT,scope TEXT,tone TEXT,source TEXT,at REAL,PRIMARY KEY(person,scope));
+    CREATE TABLE IF NOT EXISTS kei_relationship_signals(id TEXT PRIMARY KEY,person TEXT,scope TEXT,direction TEXT,dimension TEXT,delta REAL,sources TEXT,action TEXT,at REAL);
+    CREATE TABLE IF NOT EXISTS kei_emotion_credits(person TEXT,scope TEXT,source TEXT,kind TEXT,at REAL,PRIMARY KEY(person,scope,source));
     CREATE TABLE IF NOT EXISTS kei_relationship_change_directions(id TEXT PRIMARY KEY,direction TEXT);
     CREATE TABLE IF NOT EXISTS kei_group_observations(
       id TEXT PRIMARY KEY,scope TEXT,kind TEXT,content TEXT,people TEXT,sources TEXT,at REAL);
@@ -109,6 +112,21 @@ class Relationships:
             "romantic_opt_in": False,
             **(json.loads(row["settings"]) if row else {}),
         }
+
+    def emotion_credit(self,person,scope,kind,rows):
+        """A distinct real apology/conflict can matter inside a conversation session."""
+        if kind not in ('conflict','reconciliation'):return False
+        own=[r for r in rows if r['role']=='user' and self.identity.person_for_user(r['user'])==person]
+        text=' '.join(direct_words(r) for r in own)
+        if kind=='reconciliation' and not re.search(r'xin lỗi|sorry|soww?y|sowwy|làm hòa|thôi mà',text,re.I):return False
+        if not own:return False
+        now=max(r['at'] for r in own)
+        if self.db.one('SELECT source FROM kei_emotion_credits WHERE person=? AND scope=? AND kind=? AND at>?',(person,scope,kind,now-3600)):return False
+        if self.db.one('SELECT count(*) n FROM kei_emotion_credits WHERE person=? AND at>?',(person,now-86400))['n']>=4:return False
+        # An existing credit for the same human message cannot change kind and count twice.
+        if any(self.db.one('SELECT source FROM kei_emotion_credits WHERE person=? AND scope=? AND source=?',(person,scope,r['id'])) for r in own):return False
+        for row in own:self.db.execute('INSERT OR IGNORE INTO kei_emotion_credits VALUES (?,?,?,?,?)',(person,scope,row['id'],kind,now))
+        return True
 
     def set_preferences(self, person, **values):
         if not set(values) <= {"rank_notifications", "romantic_opt_in"}:
@@ -261,7 +279,7 @@ class Relationships:
         # A new independent session and a full day must confirm a proposed change.
         pending = current.get("pending", {})
         independent = set(sources) - set(pending.get("sources", []))
-        if pending.get("label") != label or pending.get("category") != category:
+        if pending.get("category") != category:
             current["pending"] = {
                 "label": label,
                 "category": category,
@@ -271,6 +289,8 @@ class Relationships:
             }
             self._save(person, scope, current, now)
             return False
+        # Wording may vary between turns; a rename must not restart the clock.
+        label = pending.get('label') or label
         if (
             now - pending["since"] < 86400
             or not independent
@@ -348,7 +368,8 @@ class Relationships:
             if known_direction
             else ("Down" if RANKS.get(row["category"], RANKS["neutral"])[1] < old_stage else "Up")
         )
-        return {"id": row["id"], "content": f"-# Relationship Rank {direction}: {row['label']}"}
+        arrow = '↓' if direction == 'Down' else '↑'
+        return {"id": row["id"], "content": f"-# {row['label']} {arrow}"}
 
     def delivered(self, notification_id):
         self.db.execute(
@@ -356,8 +377,38 @@ class Relationships:
             (notification_id,),
         )
 
+    def mood(self,person,scope,tone=None,source=None):
+        if tone in ('calm','playful','warm','annoyed') and source and self._evidence(person,scope,[source]):
+            self.db.execute('INSERT OR REPLACE INTO kei_social_moods VALUES (?,?,?,?,?)',(person,scope,tone,source,time.time()))
+        row=self.db.one('SELECT tone,source,at FROM kei_social_moods WHERE person=? AND scope=? AND at>?',(person,scope,time.time()-7200))
+        return {'tone':row['tone'],'at':row['at']} if row and not self.db.tombstoned([row['source']]) else None
+
+    def delta_notice(self,person,scope,before,after,sources,action,threshold=0.012,now=None):
+        now=time.time() if now is None else now
+        if not action or not self.preferences(person)['rank_notifications'] or self._evidence(person,scope,sources) is None:return None
+        # Real sourced dimension updates only. Character tone alone is insufficient.
+        deltas={k:(float(after.get(k,0))-float(before.get(k,0)))*(-1 if k=='tension' else 1) for k in ('trust','warmth','playfulness','tension')}
+        key=max(deltas,key=lambda k:abs(deltas[k]))
+        delta=deltas['trust']*1.4+deltas['warmth']+deltas['playfulness']*.45+deltas['tension']*.8
+        if abs(delta)<max(.005,float(threshold)):return None
+        interval=45 if abs(delta)>=.035 else 180
+        previous=self.db.one("SELECT s.at FROM kei_relationship_signals s JOIN kei_social_actions a ON a.id=s.action WHERE s.person=? AND s.scope=? AND s.at>? AND a.status IN ('pending','sending','sent') ORDER BY s.at DESC LIMIT 1",(person,scope,now-interval))
+        if previous:return None
+        ident=hashlib.sha256((person+scope+dumps(sources)).encode()).hexdigest()[:24]
+        if self.db.one('SELECT id FROM kei_relationship_signals WHERE id=?',(ident,)):return None
+        direction='up' if delta>0 else 'down'
+        self.db.execute('INSERT INTO kei_relationship_signals VALUES (?,?,?,?,?,?,?,?,?)',(ident,person,scope,direction,key,delta,dumps(sources),action,now))
+        arrow='↑' if direction=='up' else '↓'
+        if abs(delta)>=.035:arrow*=2
+        return '-# '+self.rank(person,scope)['label']+' '+arrow
+
     def forget(self, person, scope=None, sources=()):
         sources = set(sources)
+        if scope:self.db.execute('DELETE FROM kei_social_moods WHERE person=? AND scope=?',(person,scope))
+        else:self.db.execute('DELETE FROM kei_social_moods WHERE person=?',(person,))
+        self.db.execute('DELETE FROM kei_emotion_credits WHERE person=?'+(' AND scope=?' if scope else ''),(person,scope) if scope else (person,))
+        for signal in self.db.rows('SELECT * FROM kei_relationship_signals WHERE person=?',(person,)):
+            if (not scope or signal['scope']==scope) and (not sources or sources.intersection(json.loads(signal['sources']))):self.db.execute('DELETE FROM kei_relationship_signals WHERE id=?',(signal['id'],))
         for table in ("kei_relationship_changes", "kei_group_observations"):
             for row in self.db.rows("SELECT * FROM " + table):
                 owned = row.get("person") == person and (not scope or row.get("scope") == scope)

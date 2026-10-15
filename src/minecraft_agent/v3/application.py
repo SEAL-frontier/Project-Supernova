@@ -12,10 +12,10 @@ from . import VERSION
 from .engine import Engine
 from .bridge import Bridge
 from .config import Secrets, normalize_profile, save_config
-from .social import nickname, ambient_allowed, low_signal, followup_allowed
+from .social import nickname, ambient_allowed, low_signal, followup_allowed, participation_candidate
 from .panel import Panel
 from .ux import UserExperience
-from .social_policy import asks_quiet
+from .social_policy import asks_quiet, operation
 LOG = logging.getLogger('kei')
 
 class MinecraftMessage:
@@ -115,6 +115,8 @@ class Kei(LegacyKei):
         self.ux.register()
         self.ambient_last = {}
         self.direct_windows = {}
+        self.followup_turns = {}
+        self.channel_speakers = {}
         self.search_cards = {}
 
     def can_report(self, task):
@@ -179,21 +181,6 @@ class Kei(LegacyKei):
             person = self.engine.identity.resolve('discord', interaction.user.id)
             self.engine.memory.set_preference(person, dm_opt_in=mode.value == 'on')
             await interaction.response.send_message('DM chủ động: **' + mode.value + '**. Không trả lời thì Kei sẽ không gửi đuổi.', ephemeral=True)
-
-        @social.command(name='ambient', description='Admin: cho Kei tự tham gia public — mặc định off')
-        @app_commands.choices(mode=[app_commands.Choice(name=x, value=x) for x in ('off', 'free', 'whitelist')])
-        async def ambient(interaction: discord.Interaction, mode: app_commands.Choice[str], channel: discord.TextChannel | None=None):
-            if not interaction.guild_id or not (interaction.permissions.manage_guild or str(interaction.user.id) == self.cfg['owner_id']):
-                await interaction.response.send_message('Cần quyền quản lý server Discord.', ephemeral=True)
-                return
-            key = 'ambient:guild:' + str(interaction.guild_id)
-            old = self.store.one('SELECT value FROM kei_meta WHERE key=?', (key,))
-            settings = json.loads(old['value']) if old else {'enabled': False, 'mode': 'whitelist', 'channels': []}
-            settings.update(enabled=mode.value != 'off', mode=mode.value if mode.value != 'off' else settings['mode'])
-            if mode.value == 'whitelist':
-                settings['channels'] = list(dict.fromkeys(settings['channels'] + [str(channel.id if channel else interaction.channel_id)]))
-            self.store.execute('INSERT OR REPLACE INTO kei_meta VALUES (?,?)', (key, dumps(settings)))
-            await interaction.response.send_message('Đã lưu chế độ **' + mode.value + '** cho guild này. Tag/reply/gọi tên vẫn dùng được khi off.', ephemeral=True)
 
         @social.command(name='timezone', description='Đặt timezone IANA của bạn cho giờ yên lặng')
         async def timezone_command(interaction: discord.Interaction, timezone: str):
@@ -331,7 +318,10 @@ class Kei(LegacyKei):
         guild = message.guild
         scope = 'dm:' + user if guild is None else 'guild:' + str(guild.id) + ':' + channel
         person = self.engine.identity.resolve('discord', user)
-        aliases = self.cfg['social']['triggers'] + [r['alias'] for r in self.store.rows('SELECT alias FROM kei_aliases WHERE scope=? AND (person=? OR scope LIKE ?)', (scope, person, 'guild:%'))]
+        aliases = self.cfg['social'].get('triggers', ['kei']) + [r['alias'] for r in self.store.rows('SELECT alias FROM kei_aliases WHERE scope=? AND person=?', (scope, person))]
+        named = bool(nickname(message.content, self.cfg['social'].get('triggers', ['kei'])))
+        learned = bool(nickname(message.content, [a for a in aliases if a not in self.cfg['social'].get('triggers', ['kei'])]))
+        strong = guild is None or self.user in message.mentions or named or message.content.startswith('kei!')
         direct = guild is None or self.user in message.mentions or bool(nickname(message.content, aliases)) or message.content.startswith('kei!')
         to_other = False
         if message.reference:
@@ -341,34 +331,37 @@ class Kei(LegacyKei):
                     ref = await message.channel.fetch_message(message.reference.message_id)
                 except discord.HTTPException:
                     ref = None
+            strong = strong or bool(ref and ref.author.id == self.user.id)
             direct = direct or bool(ref and ref.author.id == self.user.id)
             to_other = bool(ref and ref.author.id != self.user.id)
         now = time.time()
-        if direct:
-            self.direct_windows[channel, user] = now + self.cfg['social'].get('followup_seconds', 90)
-        last = self.store.one("SELECT content FROM kei_messages WHERE scope=? AND role='assistant' AND forgotten=0 ORDER BY at DESC LIMIT 1", (scope,))
-        following = self.direct_windows.get((channel, user), 0) > now and followup_allowed(message.content, to_other=to_other, answering=bool(last and '?' in last['content']))
+        previous_speaker = self.channel_speakers.get(channel)
+        self.channel_speakers[channel] = user
+        if previous_speaker and previous_speaker != user:
+            for key in list(self.direct_windows):
+                if key[0] == channel:
+                    self.direct_windows.pop(key, None)
+        if strong:
+            self.direct_windows[channel, user] = now + self.cfg['social'].get('followup_seconds', 45)
+            self.followup_turns[channel, user] = 0
+        last = self.store.one("SELECT content FROM kei_messages WHERE scope=? AND user=? AND role='assistant' AND forgotten=0 ORDER BY at DESC LIMIT 1", (scope, user))
+        following = self.followup_turns.get((channel, user), 0) < 2 and self.direct_windows.get((channel, user), 0) > now and followup_allowed(message.content, to_other=to_other, answering=bool(last and '?' in last['content']))
         if not direct and (not to_other) and (message.content.lower().strip(' .!') in ('ừ', 'ừ làm đi', 'ok', 'okay', 'yes', 'làm đi', 'xác nhận', 'đồng ý')):
             following = following or len(self.store.rows("SELECT id FROM kei_tasks WHERE requester=? AND scope=? AND status='waiting'", (user, scope))) == 1
-        ambient = bool(guild and ambient_allowed(self.cfg, channel, guild.id, self.store))
-        if not (direct or following or ambient):
+        if not (direct or following):
             return
-        if ambient and (not direct) and (not following):
-            busy = self.engine.scope_locks[scope].locked() or low_signal(message.content) or to_other or (time.time() - self.ambient_last.get(scope, 0) < self.cfg['social'].get('ambient_interval', 60))
-            if busy:
-                if not self.store.seen(message.id):
-                    sync_identity(self.store, message.author, guild.id)
-                    self.store.add_message(scope, user, 'user', message.content[:6000], str(message.id))
-                    self.store.execute('INSERT OR REPLACE INTO kei_event_meta VALUES (?,?,?,?,?,?,?,?,?)', (str(message.id), 'discord', person, user, '', scope, channel, 0, time.time()))
-                return
-            self.ambient_last[scope] = time.time()
+        weak_reason = 'nickname' if learned and (not strong) else 'followup' if following and (not strong) else 'direct'
+        if not strong and (not operation(message.content)) and (not participation_candidate(message.id, weak_reason, self.engine.memory.relationship(person, scope))):
+            return
+        if following and (not direct):
+            self.followup_turns[channel, user] = self.followup_turns.get((channel, user), 0) + 1
         if guild:
             restricted = not message.channel.permissions_for(guild.default_role).view_channel
             self.store.execute('INSERT OR REPLACE INTO kei_meta VALUES (?,?)', ('scope-visibility:' + scope, 'restricted' if restricted else 'group'))
         self.following[channel, user] = time.time() + 90
         await super().on_message(message)
         if self.store.one('SELECT id FROM kei_messages WHERE id=?', (str(message.id),)):
-            self.store.execute('INSERT OR REPLACE INTO kei_event_meta VALUES (?,?,?,?,?,?,?,?,?)', (str(message.id), 'discord', person, user, '', scope, channel, 1 if direct else 2 if following else 0, time.time()))
+            self.store.execute('INSERT OR REPLACE INTO kei_event_meta VALUES (?,?,?,?,?,?,?,?,?)', (str(message.id), 'discord', person, user, '', scope, channel, 1 if strong else 3 if learned else 2 if following else 0, time.time()))
 
     @asynccontextmanager
     async def conversation_typing(self, channel, scope, user):
@@ -507,6 +500,11 @@ class Kei(LegacyKei):
                 try:
                     channel = await self.destination(row['channel'])
                     if not row['channel'].startswith('mc:'):
+                        if row['kind'] in ('reply', 'short_reply'):
+                            try:
+                                await self.http.send_typing(int(row['channel']))
+                            except discord.HTTPException:
+                                pass
                         sent = await self.engine.conversation.deliver(channel, row)
                         if sent:
                             self.store.execute('INSERT OR REPLACE INTO kei_social_sent VALUES (?,?)', (row['id'], str(sent)))

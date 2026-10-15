@@ -142,8 +142,20 @@ class ServerTools:
         r=self.shell(f"n=$(stat -c %s {log}); if [ \"$n\" -lt {offset} ]; then tail -n 150 {log}; else tail -c +{offset+1} {log}; fi")
         receipt=console_receipt(command,r['stdout']) if r['exit_code']==0 else None
         return {'accepted':True,'console_output':r['stdout'],'verified':bool(receipt),'verification':receipt,'note':'Receipt proves only the stated scope; otherwise perform independent readback.'}
+    def startup_marker(self):
+        try:
+            text=self.do_inspect('logs',400).get('stdout','')
+            matches=[line for line in str(text).splitlines() if re.search(r'Done \([\d.]+s\)',line)]
+            return matches[-1] if matches else ''
+        except Exception:return ''
+
     def do_power(self,action):
-        before=self.api('GET','');self.api('POST','/power',{'action':action})
+        before=self.api('GET','')
+        state=before.get('state',before.get('status'))
+        if (action=='start' and state=='running') or (action in ('stop','kill') and state=='offline'):
+            return {'verified':True,'state':state,'already_in_state':True,'verification':{'kind':'power_state','scope':'Requested process state already reported by control plane; Minecraft readiness is separate'}}
+        baseline=self.startup_marker() if action in ('start','restart') else ''
+        self.api('POST','/power',{'action':action})
         stopped=False;last=None
         for _ in range(180):
             last=self.api('GET','');state=last.get('state',last.get('status'))
@@ -152,8 +164,8 @@ class ServerTools:
             if action in ('start','restart') and state=='running':
                 old=before.get('resources',{}).get('uptime',0);new=last.get('resources',{}).get('uptime',0)
                 if action=='start' or stopped or (new and old and new<old):
-                    log=self.do_inspect('logs',40)['stdout']
-                    if re.search(r'Done \([\d.]+s\)',log):return {'verified':True,'state':state,'startup':log[-5000:]}
+                    marker=self.startup_marker()
+                    if marker and marker!=baseline:return {'verified':True,'state':state,'startup':marker,'verification':{'kind':'fresh_startup_marker','scope':'New startup Done line after power request'}}
             time.sleep(2)
         return {'verified':False,'state':last,'note':'Power accepted but readiness unverified; do not repeat blindly.'}
     def do_files(self,action,path,content=None,backup_path=None):

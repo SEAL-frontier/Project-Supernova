@@ -142,17 +142,19 @@ class Memory:
                     self.alias_callback()
         profile = self.relationship(person, scope, now)
         self.relationships.observe(person, scope, digest, kind, rows)
-        new_session = self.relationships.credit(person, scope, digest, rows)
-        meaningful = self.db.one('SELECT count(*) n FROM kei_social_events WHERE person=? AND at>?', (person, now - 86400))['n']
+        social_kind = kind in ('warm_exchange', 'nickname', 'milestone', 'conflict', 'reconciliation', 'boundary')
+        new_session = self.relationships.credit(person, scope, digest, rows) if social_kind else False
+        emotional = self.relationships.emotion_credit(person, scope, kind, rows)
+        meaningful = self.db.one("SELECT count(*) n FROM kei_relationship_credits c JOIN kei_social_events e ON e.id=c.event WHERE c.person=? AND c.at>? AND e.kind IN ('warm_exchange','nickname','milestone','conflict','reconciliation','boundary')", (person, now - 86400))['n']
         if meaningful <= 5 and new_session:
             profile['familiarity'] = min(1, profile['familiarity'] + 0.01)
         delta = proposal.get('dimensions', {})
         if isinstance(delta, dict):
             for d in DIMS:
                 direction = delta.get(d, 0)
-                if isinstance(direction, (int, float)) and new_session and (meaningful <= 5 or d == 'tension'):
+                if isinstance(direction, (int, float)) and (new_session or emotional) and (meaningful <= 5 or d == 'tension' or emotional):
                     profile[d] = max(0, min(1, float(profile.get(d, 0.5)) + max(-1, min(1, direction)) * 0.015))
-        if kind == 'reconciliation' and new_session:
+        if kind == 'reconciliation' and (new_session or emotional):
             profile['tension'] = max(0, profile['tension'] - 0.1)
         if new_session:
             profile['confidence'] = min(0.95, profile.get('confidence', 0.2) + 0.02)
@@ -194,11 +196,35 @@ class Memory:
         for row in self.db.rows('SELECT * FROM kei_episodes WHERE person=? AND scope=? ORDER BY importance DESC,at DESC LIMIT 30', (person, scope)):
             if not self.db.tombstoned(json.loads(row['sources'])):
                 episodes.append({'id': row['id'], 'title': row['title'], 'summary': unpack(row['summary'])['text'], 'at': row['at']})
-            if len(episodes) >= 5:
+            if len(episodes) >= 12:
                 break
         changes = self.db.rows('SELECT old_label,label,reason,at FROM kei_relationship_changes WHERE person=? AND scope=? ORDER BY at DESC LIMIT 8', (person, scope))
         aliases = [r['alias'] for r in self.db.rows('SELECT alias,sources FROM kei_aliases WHERE person=? AND scope=?', (person, scope)) if not self.db.tombstoned(json.loads(r['sources']))]
-        return {'person': person, 'scope': scope, 'rank': {k: v for k, v in rel['rank'].items() if k != 'pending'}, 'dimensions': {k: rel.get(k, 0) for k in (*DIMS, 'confidence', 'interaction_frequency')}, 'frequency': rel['frequency'], 'memories': episodes, 'changes': changes, 'preferences': self.preference(person), 'aliases': aliases, 'addressing': rel.get('addressing', ''), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', '')}
+        return {'person': person, 'scope': scope, 'rank': {k: v for k, v in rel['rank'].items() if k != 'pending'}, 'rank_progress': {'pending_label': rel['rank'].get('pending', {}).get('label'), 'earliest_confirmation': rel['rank'].get('pending', {}).get('since', 0) + 86400 if rel['rank'].get('pending') else None}, 'mood': self.relationships.mood(person, scope), 'signals': [{k: r[k] for k in ('direction', 'dimension', 'delta', 'at')} for r in self.db.rows('SELECT * FROM kei_relationship_signals WHERE person=? AND scope=? ORDER BY at DESC LIMIT 8', (person, scope)) if not self.db.tombstoned(json.loads(r['sources']))], 'dimensions': {k: rel.get(k, 0) for k in (*DIMS, 'confidence', 'interaction_frequency')}, 'frequency': rel['frequency'], 'memories': episodes, 'changes': changes, 'preferences': self.preference(person), 'aliases': aliases, 'addressing': rel.get('addressing', ''), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', '')}
+
+    def episodes_page(self, user, offset=0, limit=12, query=''):
+        person = self.identity.person_for_user(str(user))
+        scope = 'dm:' + str(user)
+        offset = max(0, int(offset))
+        limit = max(1, min(24, int(limit)))
+        query = str(query).strip()[:120]
+        where = 'e.person=? AND e.scope=? AND NOT EXISTS (SELECT 1 FROM json_each(e.sources) s JOIN kei_forget_tombstones f ON f.source=s.value)'
+        args = [person, scope]
+        if query:
+            where += " AND (e.title LIKE ? ESCAPE '\\' OR e.summary LIKE ? ESCAPE '\\')"
+            match = '%' + query.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+            args += [match, match]
+        total = self.db.one('SELECT count(*) n FROM kei_episodes e WHERE ' + where, args)['n']
+        rows = self.db.rows('SELECT e.* FROM kei_episodes e WHERE ' + where + ' ORDER BY e.at DESC,e.id LIMIT ? OFFSET ?', args + [limit, offset])
+        items = []
+        for row in rows:
+            summary = unpack(row['summary'])['text']
+            title = row['title']
+            if title in KINDS or title in ('Một chuyện đáng nhớ', 'Chuyện đáng nhớ'):
+                title = re.split('[.!?\\n]', summary, 1)[0].strip()[:90] or 'Một lần nói chuyện với Kei'
+            excerpts = [{'role': q.get('role', 'user'), 'text': str(q.get('content', '')).split('[REPLIED MESSAGE', 1)[0][:1800]} for q in json.loads(row['quotes'])[:8]]
+            items.append({'id': row['id'], 'title': title, 'summary': summary, 'at': row['at'], 'excerpts': excerpts})
+        return {'items': items, 'total': total, 'next_offset': offset + len(items) if offset + len(items) < total else None}
 
     def _visible(self, row, scope, sharing):
         same = row['scope'] == scope
@@ -269,6 +295,10 @@ class Memory:
         self.db.execute('INSERT OR REPLACE INTO kei_meta VALUES (?,?)', ('memory-forget-generation', str(int((generation or {}).get('value', '0')) + 1)))
         person = self.identity.person_for_user(user)
         targets = set(ids or [])
+        if scope is None and (not targets):
+            from .instructions import set as clear_instructions
+            clear_instructions(self.db, person, '')
+            self.db.execute('DELETE FROM kei_meta WHERE key=?', ('contact:' + person,))
         sources = set()
         count = 0
         account_ids = [r['account'] if r['platform'] == 'discord' else 'mc:' + r['server'] + ':' + r['account'] for r in self.db.rows('SELECT * FROM kei_accounts WHERE person=?', (person,))]

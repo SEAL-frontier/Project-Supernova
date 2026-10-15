@@ -4,7 +4,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 import yaml
 from dotenv import load_dotenv
-DEFAULTS = {'timezone': 'Asia/Ho_Chi_Minh', 'database': 'data/kei.db', 'social': {'triggers': ['kei'], 'ambient': {'enabled': False, 'mode': 'whitelist', 'channels': []}, 'reply_cooldown': 120, 'followup_seconds': 90, 'ambient_interval': 60, 'context_messages': 10, 'dm_daily_limit': 3, 'dm_interval_hours': 4, 'quiet_start': 22, 'quiet_end': 8}, 'memory': {'retention_days': 90, 'cross_context': 'discreet', 'incremental_hours': 6, 'daily_hour': 4, 'recent_turns': 96, 'context_chars': 120000, 'memory_context_chars': 32000}, 'bridge': {'enabled': False, 'host': '0.0.0.0', 'port': 8767}, 'decisions': {'provider': 'off', 'min_confidence': 0.65, 'timeout': 8}, 'servers': [], 'assignments': {}}
+DEFAULTS = {'custom_instructions': '', 'timezone': 'Asia/Ho_Chi_Minh', 'database': 'data/kei.db', 'social': {'triggers': ['kei'], 'ambient': {'enabled': False, 'mode': 'whitelist', 'channels': []}, 'reply_cooldown': 120, 'followup_seconds': 45, 'ambient_interval': 60, 'context_messages': 10, 'dm_daily_limit': 3, 'dm_interval_hours': 4, 'quiet_start': 22, 'quiet_end': 8}, 'memory': {'retention_days': 90, 'cross_context': 'discreet', 'incremental_hours': 6, 'daily_hour': 4, 'recent_turns': 96, 'context_chars': 120000, 'memory_context_chars': 32000}, 'bridge': {'enabled': False, 'host': '0.0.0.0', 'port': 8767}, 'decisions': {'provider': 'off', 'min_confidence': 0.65, 'timeout': 8}, 'servers': [], 'assignments': {}}
 
 def merge(base, extra):
     out = copy.deepcopy(base)

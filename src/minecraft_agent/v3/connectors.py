@@ -196,6 +196,7 @@ class HybridTools(ServerTools):
     def api(self, method, suffix, body=None):
         if self.panel:
             translated = {"/commands": "/command"}.get(suffix, suffix)
+            if suffix == "/power":body={"signal":body["action"]}
             if suffix == "/commands":
                 body = {"command": body["commands"][0]}
             if not suffix:
@@ -351,6 +352,18 @@ class HybridTools(ServerTools):
             "data": receipt.get("data", {}) if receipt else {},
             "note": "Fresh log evidence only. Acceptance is not completion.",
         }
+
+    def startup_marker(self):
+        try:
+            if self.cs.get('ssh',{}).get('volume'):
+                pattern=r'Done \([0-9.]+s\)'
+                result=self.shell('grep -E '+shlex.quote(pattern)+' '+shlex.quote(self.absolute('logs/latest.log'))+' | tail -n 1')
+                text=result.get('stdout','')
+            elif self.panel:text=str(self.panel.read('logs/latest.log'))
+            else:return super().startup_marker()
+            matches=[line for line in text.splitlines() if re.search(r'Done \([\d.]+s\)',line)]
+            return matches[-1] if matches else ''
+        except Exception:return ''
 
     def do_power(self, action):
         if self.panel or "wings" in self.cs:

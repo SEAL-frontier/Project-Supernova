@@ -10,7 +10,7 @@
 
 Thật ra là her problem, your server. Chia quyền nuôi server hơi lỗi. 😭
 
-![Version](https://img.shields.io/badge/version-3.1.0--rc.2-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-3.1.0--rc.3-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
 
@@ -46,7 +46,7 @@ tiến độ và quyền server cùng một chỗ. “Adaptive” là chọn cá
 được với server, model và nhân vật của họ. Bản thử nghiệm ban đầu dùng Tendou Kei.
 Người ta cho ẻm một buổi chiều yên bình; bọn t cho ẻm một Minecraft server. 😭
 
-> **3.1.0-rc.2 đang là release candidate.** Nghiệm thu gồm social tự nhiên và memory bền,
+> **3.1.0-rc.3 đang là release candidate.** Nghiệm thu gồm social tự nhiên và memory bền,
 > plugin/connector hoạt động trên server thật, và người mới cài được theo hướng dẫn.
 > Xem [biên bản triển khai](IMPLEMENTATION.md) và [bảng tính năng](FEATURE_MATRIX.md).
 
@@ -127,7 +127,7 @@ Các file prompt/persona/env/test public vẫn trống; wizard tạo **file loca
 |---|---|
 | `/server connect`, `/server list`, `/server grant` | Nối Panel riêng tư, xem server, cấp quyền |
 | `/link`, `/unlink` | Nối hoặc gỡ danh tính Minecraft |
-| `/social dm`, `/social ambient`, `/social timezone` | Chỉnh mức chủ động và timezone |
+| `/social dm`, `/social timezone` | Chỉnh mức chủ động và timezone |
 | `/privacy`, `/memory show`, `/memory forget` | Xem và quản lý memory |
 | `/persona auto/soft/spicy` | Chọn giọng cũ, đậm vị hoặc linh hoạt |
 | `/debug off/minimal/advanced` | Chỉnh độ chi tiết tiến độ |

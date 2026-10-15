@@ -4,7 +4,7 @@ from __future__ import annotations
 import json, time, logging, contextvars
 import discord
 from ..v2.store import uid, dumps
-from .formatting import chunks
+from .formatting import chunks, chat_chunks
 
 LOG = logging.getLogger("kei.conversation")
 CURRENT_TASK = contextvars.ContextVar("kei_delivery_task", default=None)
@@ -148,6 +148,10 @@ class Conversation:
             (str(request), scope, time.time() - 3600),
         )
         data = json.loads(row["data"]) if row else {"messages": []}
+        if not row and scope.startswith('dm:'):
+            cutoff=self.db.one('SELECT at FROM kei_messages WHERE id=? AND scope=?',(str(request),scope))
+            if cutoff:
+                data['messages']=list(reversed(self.db.rows("SELECT id,user,role,content,at FROM kei_messages WHERE scope=? AND forgotten=0 AND at<=? AND (role='assistant' OR user=?) ORDER BY at DESC LIMIT 10",(scope,cutoff['at'],scope.split(':',1)[1]))))
         forgotten = {r["source"] for r in self.db.rows("SELECT source FROM kei_forget_tombstones")}
         data["messages"] = [m for m in data["messages"] if m["id"] not in forgotten]
         return data
@@ -161,6 +165,8 @@ class Conversation:
         if mode not in ("channel", "reply", "edit") or target not in allowed:
             mode = "reply"
             target = str(request)
+        if scope.startswith("dm:") and mode == "reply" and target == str(request):
+            mode = "channel"
         if mode == "edit":
             card = self.db.one(
                 "SELECT c.message FROM kei_debug_cards c JOIN kei_tasks t ON t.id=c.task WHERE c.message=? AND t.scope=? AND t.requester=?",
@@ -227,7 +233,7 @@ class Conversation:
                 pass
         reference = await self.reference(channel, ident) if mode != "channel" else None
         first = None
-        for index, chunk in enumerate(chunks(row["content"])):
+        for index, chunk in enumerate(chat_chunks(row["content"])):
             sent = await channel.send(
                 chunk,
                 reference=reference if index == 0 else None,

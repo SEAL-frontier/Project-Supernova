@@ -10,7 +10,7 @@
 
 Actually, her problem. Your server. We got the custody arrangement wrong. 😭
 
-![Version](https://img.shields.io/badge/version-3.1.0--rc.2-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-3.1.0--rc.3-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
@@ -48,7 +48,7 @@ The open-source goal is to let other people run that setup with their own server
 models and characters. The original experiment happened to hand the job to Tendou Kei.
 She received a Minecraft server instead of a peaceful afternoon. 😭
 
-> **3.1.0-rc.2 is a release candidate.** Stable requires three things: natural social behavior
+> **3.1.0-rc.3 is a release candidate.** Stable requires three things: natural social behavior
 > with durable memory, plugin/connectors verified on a real server, and a clean-clone
 > setup that does not require finding the developer. Evidence lives in
 > [the implementation log](IMPLEMENTATION.md) and [feature matrix](FEATURE_MATRIX.md).
@@ -144,7 +144,7 @@ local files**, not GitHub's placeholders.
 |---|---|
 | `/server connect`, `/server list`, `/server grant` | Connect a Panel privately and manage access |
 | `/link`, `/unlink` | Connect or separate Minecraft identity |
-| `/social dm`, `/social ambient`, `/social timezone` | Decide how much she appears in your life |
+| `/social dm`, `/social timezone` | Decide how much she appears in your life |
 | `/privacy`, `/memory show`, `/memory forget` | Inspect and control memory |
 | `/persona auto/soft/spicy` | Choose the old, stronger or adaptive style |
 | `/debug off/minimal/advanced` | Choose job progress detail |

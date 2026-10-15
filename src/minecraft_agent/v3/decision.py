@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio, json, logging, math, time
 import httpx
 from .config import Secrets
+from .social import REACTIONS
 
 LOG = logging.getLogger("kei.decision")
 QUESTIONS = [
@@ -23,7 +24,7 @@ QUESTIONS = [
         "type": "choice",
         "name": "reaction",
         "instructions": "If a reaction fits, choose a suitable one. Thumbs up is a neutral/playful acknowledgment; heart for warmth, support or affectionate thanks.",
-        "choices": [{"value": "👍"}, {"value": "❤️"}],
+        "choices": [{"value": value} for value in REACTIONS],
     },
 ]
 

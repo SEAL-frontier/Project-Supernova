@@ -138,7 +138,15 @@ class Panel:
             raise PermissionError(
                 "Panel không cấp quyền cho thao tác này (" + str(r.status_code) + ")."
             )
-        r.raise_for_status()
+        if r.is_error:
+            details=[]
+            try:
+                for error in r.json().get('errors',[])[:3]:
+                    details.append(str(error.get('detail',''))[:200])
+            except (ValueError,AttributeError,TypeError):pass
+            message='Panel từ chối thao tác (HTTP '+str(r.status_code)+')'+(': '+'; '.join(details) if details else '')+'.'
+            if 400<=r.status_code<500 and r.status_code not in (408,429):raise ValueError(message)
+            raise RuntimeError(message)
         if not r.content:
             return {}
         return r.json() if "json" in r.headers.get("content-type", "") else {"text": r.text}

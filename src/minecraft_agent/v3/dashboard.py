@@ -157,7 +157,7 @@ class Dashboard:
                 response = web.json_response(
                     {"error": "Chưa xử lý được. Thử lại hoặc xem diagnostics local."}, status=502
                 )
-            response.headers["Cache-Control"] = "no-store"
+            response.headers["Cache-Control"] = "public, max-age=86400" if request.path.startswith('/assets/') and response.status==200 else "no-store"
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["Referrer-Policy"] = "no-referrer"
             response.headers["X-Frame-Options"] = "DENY"
@@ -170,6 +170,9 @@ class Dashboard:
         app.router.add_get("/oauth/callback", self.callback)
         app.router.add_get("/api/state", self.state)
         app.router.add_get("/api/profile", self.profile)
+        app.router.add_get("/api/memories", self.memories)
+        app.router.add_post("/api/access/preview", self.access_preview)
+        app.router.add_get("/assets/kei-spring.jpg", self.banner)
         app.router.add_post("/api/settings", self.settings)
         app.router.add_post("/api/link", self.link)
         app.router.add_post("/api/unlink", self.unlink)
@@ -351,7 +354,7 @@ class Dashboard:
             + nonce
             + "'; style-src 'nonce-"
             + nonce
-            + "'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+            + "'; connect-src 'self'; img-src 'self' data: https://cdn.discordapp.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         )
         return response
 
@@ -360,12 +363,20 @@ class Dashboard:
             raise web.HTTPNotFound(text="Avatar asset unavailable.")
         return web.FileResponse(AVATAR)
 
+    async def banner(self, request):
+        path=AVATAR.with_name('kei-spring.jpg')
+        if not path.is_file():raise web.HTTPNotFound()
+        return web.FileResponse(path)
+
     async def state(self, request):
         session = await self.session(request)
         result = self.ux.state(session["user"])
         for server in result["servers"]:
             if server["manage_access"]:
                 server["grants"] = self.ux.access.entries(session["user"], server["id"])
+                for grant in server['grants'][:50]:
+                    grant['person']=await self.ux.public_person(grant['subject'],server['id'])
+                    if grant.get('issuer') and str(grant['issuer']).isdigit():grant['grantor']=await self.ux.public_person(grant['issuer'],server['id'])
         result.update(name=session["name"], csrf=session["csrf"], guilds=self.guilds(session))
         return web.json_response(result)
 
@@ -373,6 +384,14 @@ class Dashboard:
         session = await self.session(request)
         # Personal web profile uses only the authenticated user's own DM context.
         return web.json_response(self.ux.profile(session["user"], "dm:" + session["user"]))
+
+    async def memories(self,request):
+        session=await self.session(request)
+        return web.json_response(self.ux.engine.memory.episodes_page(session['user'],request.query.get('offset',0),request.query.get('limit',12),request.query.get('q','')))
+
+    async def access_preview(self,request):
+        session=await self.session(request,True);body=await request.json()
+        return web.json_response(await self.ux.access_preview(session['user'],str(body.get('server','')),str(body.get('subject',''))))
 
     async def settings(self, request):
         session = await self.session(request, True)
@@ -420,6 +439,20 @@ class Dashboard:
         level = body.get("level", "observe")
         if not subject.isdigit():
             raise ValueError("Discord user ID cần dạng số.")
+        # Validate and persist the effective policy with the grant in one transaction.
+        if body.get('execution'):
+            selected=body['execution']
+            if not isinstance(selected,dict):raise ValueError('Mức quyền chưa hợp lệ.')
+            with self.ux.db.atomic():
+                self.ux.access.set_policy(session['user'],subject,server,selected.get('extent'),selected.get('level'))
+                original=dict(body);original.pop('execution')
+                if action=='policy':return web.json_response({'ok':True})
+                # Remaining grant paths are simple local DB operations; validate action first.
+                if action=='grant':self.ux.access.grant(session['user'],subject,server,level)
+                elif action in ('admin','unadmin'):self.ux.access.delegate(session['user'],subject,server,action=='admin',level)
+                elif action=='revoke':self.ux.access.revoke(session['user'],subject,server)
+                else:raise ValueError('Thao tác chưa hợp lệ.')
+            return web.json_response({'ok':True})
         if action == "grant":
             self.ux.access.grant(session["user"], subject, server, level)
         elif action == "revoke":

@@ -106,3 +106,38 @@ keys-keys setup --edit
 keys-keys server add
 keys-keys doctor
 ```
+
+## Fewer commands, more ordinary words (rc.3)
+
+`/setup` opens three short private steps, with Back/Next and optional Minecraft linking. `/settings` opens direct category buttons plus a selector; each page can return home. The Web dashboard has the same personal controls, a three-step guide and an always-available **Về Kei** / **Góc của bạn** switch.
+
+Say “Kei, từ giờ gọi mình là anh” or add text in **Trò chuyện → Lời dặn riêng** (also `/settings → Tính cách & tiến độ → Lời dặn riêng`). Clear the field to remove it. Personal instructions are limited to 2,000 characters and are inserted as lower-authority user preferences, never as a system replacement. Operators may set optional `custom_instructions: "..."` in kei.yaml (up to 4,000 characters used). Neither option grants permissions.
+
+**Người có quyền** shows the selected server's owners, delegated admins and configured assignments. Check a Discord User ID before adding it; the roster shows display name, username, avatar when available, grantor and effective rights. Use **Sửa quyền**, **Thu hồi** or the action selector. Only server owners appoint administrators. Source configuration assignments can be overridden to conversation-only through the normal revoke operation; owner roles cannot be removed here.
+
+**Chuyện hai người** contains a searchable library: load more, open a story, read retained original excerpts. It is scoped to your authenticated DM identity, not other users' conversations. Recent conversational mood and durable rank are separate. Small Discord notices use `-# Companion ↑` or `-# Companion ↓↓` with the actual current label. Single arrows are minor changes; doubled arrows indicate larger changes. A short cooldown (3 minutes for minor shifts, 45 seconds for major shifts) and opt-out keep them quiet. A snarky assistant response alone does not lower relationship scores.
+
+The new banner is user-supplied Tendou Kei / Blue Archive fan art credited to kita (kitairoha); artwork and characters retain their creators' rights. The MIT license covers project code, not third-party artwork.
+
+## Execution permissions (rc.3)
+
+In **Người có quyền**, select a server and person. Owners can set two separate controls:
+
+| Scope | Meaning |
+| --- | --- |
+| Minecraft-only | Server-scoped files/console/power tools. No general host shell; not an OS sandbox. |
+| Full Machine | Host commands over configured SSH. Only the operator or operator-configured host administrator can issue this scope. |
+
+| Level | Behavior |
+| --- | --- |
+| Default | Routine requested changes run; dangerous steps need confirmation. |
+| Auto-review | A separate model review can approve bounded elevated steps. Destructive host commands, forced kill and remove/restore still ask the requester. Review failures fall back to asking. |
+| Read only | Reads run; every write waits for requester confirmation. Existing observation-only tasks remain observation-only. |
+| Full access | Executes within the explicitly granted scope without per-step approval. Assignment, target validation, backups and verification still apply. |
+| Custom | Uses operator `approval_rules` per tool (`allow`, `ask`, `deny`). Unknown tools ask; cannot expand the selected scope. |
+
+Example operator profile addition: `approval_rules: {files: ask, power: ask, remote_shell: deny}`. Custom is unavailable until rules exist. Admin delegation alone cannot issue host scope or bypass the owner's execution profile. Revocation sets conversation-only plus Minecraft/read-only to remove previously granted host execution.
+
+Unsolicited public participation is removed. Old ambient settings are ignored. `kei` is the default configurable trigger; learned aliases only apply to the person who established them. The public followup window is at most two candidates, expires after 45 seconds by default, and closes when another person speaks. A candidate still may be ignored or receive only a reaction. Direct mentions, replies and actual work are stronger signals.
+
+For opt-in private conversation, say “nhắn mình nhiều hơn”, “ít lại” or “đừng chủ động nhắn nữa”. Kei records the preference and adjusts future initiative using relationship/context. This is not a fixed-time reminder; use scheduled tasks for exact times. Quiet hours remain a boundary, not a send schedule.

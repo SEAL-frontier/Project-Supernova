@@ -1,8 +1,33 @@
 # Changelog
 
-Current public version: **3.1.0-rc.2**. Architecture: **Supernova**.
+Current public version: **3.1.0-rc.3**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.1.0-rc.3 — A place for the conversation
+
+- Material-inspired responsive dashboard, Kei artwork, reusable public branding, plain Vietnamese, reduced-motion support and interactive examples. Project information stays accessible after sign-in.
+- Three-step private /setup, direct settings buttons, additive personal instructions through chat, Discord and Web; optional operator-wide custom_instructions. Persona and permission rules stay authoritative.
+- Server access roster includes effective roles, display names, usernames, avatars where Discord supplies them, grantor and scoped capabilities. Account preview and explicit confirmation before changes.
+- Searchable paginated DM memory library with original excerpts; profile preview now shows up to 12 selected memories rather than five.
+- DMs send ordinary messages by default; validated intentional callbacks remain supported. Conversational line breaks stay in one message; lists, fenced code and attached mini notices stay together.
+- DBH-style current-state notices: Label ↑ / ↓ for minor sourced changes, ↑↑ / ↓↓ for larger changes. Notifications respect opt-out, deduplication and a short cooldown (3 minutes for minor shifts, 45 seconds for major shifts). Long-term rank changes remain stable and evidence-based; label rewording no longer resets a pending category.
+- Separate recent conversational mood from durable relationship rank; forgetting removes derived mood/signals and all-person forgetting also clears personal instructions.
+- Actual DM audit informed regressions. Fixture tests do not prove sustained social naturalness; prerelease acceptance remains open.
+
+
+### Additional feedback from 16 October
+
+- Removed unsolicited public engagement, including legacy free/whitelist overrides. Public candidates now require a strong trigger, the same person's learned alias, or a bounded recent followup. Followups stop after two candidates, expire after 45 seconds by default, and end when a bystander speaks. They do not renew themselves.
+- Learned aliases are scoped to person + context instead of all guild members. Weak alias/followup eligibility is deterministic per message and weighted by relationship; it only determines whether to evaluate, never grants operational authority. Configurable default trigger stays `kei`. Semantic routing can still react/silence when a name is about another Kei.
+- Expanded validated reaction bank and Discord-native compact formatting. Normal chat is not split at spaces/newlines. Code fences keep their content; only Discord length limits cause splitting. DM reply references remain deliberate historical callbacks. Public typing is emitted after a reply decision, avoiding typing on ignored noise.
+- Fixed the confirmed Pterodactyl/Pelican payload mismatch: `/power` needs `signal`, while Wings needs `action`. Panel failures return a short description instead of an internal URL/HTTP documentation dump. Real offline-to-running Panel start and bridge reconnection observed; startup verification uses a fresh Done marker even under log spam.
+- Added two independent execution settings: Minecraft-only / Full Machine and Default / Auto-review / Read only / Full access / Custom. Host scope requires an operator-issued SSH grant; Full access alone cannot escape Minecraft scope. Auto-review uses a real model review for eligible elevated steps, preserves manual approval for destructive shell/forced kill/deletion, and logs its decision. Read only gates writes; custom tool rules are supplied in operator config. Typed Minecraft tools are not an OS sandbox.
+- Opt-in proactive DMs use relationship state, meaningful topics and more/less contact preferences, not a fixed send time. Quiet hours and caps remain; one gentle unanswered followup is possible only for close users explicitly asking for more contact. Stop requests remain durable. These preferences are recorded without a technical settings receipt in conversation.
+- Hero title: “Server của bạn? Để mình lo.” with “(GGEZ) 🥀”. Vietnamese copy and setup navigation rewritten in the maintained app.
+
+
+- Corrected social update budgeting: operational/fact noise no longer consumes social credits. A sourced conflict followed by a real apology can update state inside the same conversation, with per-event deduplication, hourly and daily caps. This does not mint affection from repeated messages.
 
 ## 3.1.0-rc.2 — Web you can actually read
 

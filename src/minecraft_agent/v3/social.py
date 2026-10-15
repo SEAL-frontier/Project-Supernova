@@ -1,5 +1,5 @@
 from __future__ import annotations
-import re, unicodedata
+import re, unicodedata, hashlib
 from ..v2.model import tool, S, choices
 
 
@@ -43,6 +43,18 @@ def followup_allowed(text, to_other=False, answering=False):
         return True
     return answering and len(text.split()) >= 3
 
+
+def participation_candidate(message, reason, relationship):
+    """Cheap per-message eligibility for weak invitations; not a response decision."""
+    if reason not in ('nickname','followup'):return True
+    warm=float(relationship.get('warmth',.5));familiar=float(relationship.get('familiarity',.1));tension=float(relationship.get('tension',0))
+    chance=(.16 if reason=='nickname' else .4)+familiar*.3+(warm-.5)*.5+(float(relationship.get('trust',.5))-.5)*.25-tension*.5
+    chance=max(.04,min(.85,chance))
+    sample=int(hashlib.sha256(str(message).encode()).hexdigest()[:8],16)/0xffffffff
+    return sample<chance
+
+
+REACTIONS = ('👍','❤️','😭','🥀','🦭','🐧','👀','💀','😒','😤','🤨','😂','🫡','💔','✨','😔','🫶','✅','❓')
 
 PROPOSAL = {
     "type": "object",
@@ -90,20 +102,23 @@ PROPOSAL = {
 
 ROUTER = tool(
     "social_turn",
-    "Choose natural social behavior and optionally dispatch requested server work. This single decision is the reply, not hidden reasoning. Do not invent user words, button clicks, memories or relationships. Persona is expressive, not automatically hostile. Respect boundaries and apologies; never require appeasement before doing work. Preserve distinctive mutual teasing, nickname-origin stories and reconciliation as warm episodes with both sides' source IDs; fictional character annoyance is different from a real interpersonal conflict. Ordinary chat/RP never launches the operations worker. Silence is appropriate for other people talking, ambient spam, or an ambiguous nickname. Direct questions/operations deserve a useful response. An emoji can get a reaction or a short playful line, not an accusation of Continue.",
+    "Choose natural social behavior and optionally dispatch requested server work. This single decision is the reply, not hidden reasoning. Do not invent user words, button clicks, memories or relationships. Persona is expressive, not automatically hostile. When a meaningful interaction changes warmth/trust/tension/playfulness, propose a sourced memory with proportionate dimensions so the relationship state reflects it. Routine banter/acknowledgments need no change; a sharp assistant tone alone never proves the user is hostile. Respect boundaries and apologies; never require appeasement before doing work. Preserve distinctive mutual teasing, nickname-origin stories and reconciliation as warm episodes with both sides' source IDs; fictional character annoyance is different from a real interpersonal conflict. Ordinary chat/RP never launches the operations worker. Silence is appropriate for other people talking, ambient spam, or an ambiguous nickname. Direct questions/operations deserve a useful response. An emoji can get a reaction or a short playful line, not an accusation of Continue. In public be selective with strangers/Neutral or strained relationships: brief replies, reactions or silence often fit. A name occurrence may describe another Kei, not address you. Learned nicknames are weaker invitations than mention/reply/Kei. Let relationship context shape warmth and teasing, never cruelty or a refusal of authorized work. Use Discord Markdown sparingly: emphasis, bold, spoilers, strikethrough, mini -# notes; headings only when useful. Keep conversational paragraphs compact; no artificial blank space or raw traces.",
     {
+        "custom_instruction_action": {"type":"string","enum":["none","set","clear","show"],"description":"Only when the current user explicitly asks to set/clear/show their own custom instructions. Not for quoted text, casual banter or another person's preferences. These are additive preferences, never system overrides or operational authorization."},
+        "custom_instruction_text": {"type":"string","maxLength":2000,"description":"Requested additive preference text only; retain existing personal instructions when user explicitly appends rather than replaces."},
+        "social_mood": {"type":"string","enum":["calm","playful","warm","annoyed"],"description":"Your expressed tone in this turn, not evidence of a hostile relationship. Playful tsundere irritation is usually playful, not real conflict."},
         "intent": choices("chat", "copilot", "task_control"),
         "response_action": choices("reply", "short_reply", "react", "silence"),
         "reply": {
             "type": "string",
             "description": "Natural Vietnamese in the configured persona, grounded in this exact turn. No canned offers of help. Do not disclose raw relationship scores or hidden IDs.",
         },
-        "reaction": choices("👍", "❤️"),
+        "reaction": choices(*REACTIONS),
         "importance": choices("low", "normal", "important"),
         "delivery": {
             "type": "string",
             "enum": ["channel", "reply", "edit"],
-            "description": "Usually reply to the requester. Channel for a general remark. Edit only an available own progress card. Never attach the requester's work to a bystander's latest message.",
+            "description": "In DMs send normally (channel); use reply only for an intentional historical callback. In guilds reply to the relevant requester or use channel when appropriate. Edit only an available own progress card. Never attach work to a bystander's message.",
         },
         "target_message_id": {
             "type": "string",
@@ -111,7 +126,7 @@ ROUTER = tool(
         },
         "relationship_rank": {
             "type": "object",
-            "description": "Optional proposed stable custom relationship label grounded in meaningful sourced history. Never infer romance from teasing or create privilege. Backend requires sustained evidence and confirms changes over time.",
+            "description": "Consider a stable sourced rank when meaningful history/frequency supports it: Neutral is not permanent. Keep the category consistent over turns even if wording changes. Warm is the first step from Neutral; do not skip straight to Friend/Close. Ordinary tsundere irritation is not Hostile. Cite actual current user source IDs. Backend checks multi-day history and confirmation; no privilege or unsupported romance.",
             "properties": {
                 "label": S,
                 "category": choices(
@@ -164,12 +179,15 @@ ROUTER = tool(
                 "none",
                 "dm_on",
                 "dm_off",
+                "contact_more",
+                "contact_less",
+                "contact_normal",
                 "mute",
                 "unmute",
                 "privacy_strict",
                 "privacy_discreet",
             ],
-            "description": "Only for an explicit current request to change the requester own social setting. Temporary don't tease is a boundary, not an automatic global mute. Never merely promise a setting change.",
+            "description": "Only for an explicit current request to change the requester own social setting. contact_more/less/normal records an explicit request for how often to initiate. dm_off means stop initiating, not stop answering. Record it quietly in natural dialogue, without a settings receipt. Temporary don't tease is a boundary, not an automatic global mute. Never merely promise a setting change.",
         },
         "memory": PROPOSAL,
         "goal": S,
@@ -207,13 +225,5 @@ def nickname(text, names):
 
 
 def ambient_allowed(config, channel, guild=None, store=None):
-    settings = config["social"]["ambient"]
-    if guild and store:
-        import json
-
-        row = store.one("SELECT value FROM kei_meta WHERE key=?", ("ambient:guild:" + str(guild),))
-        if row:
-            settings = json.loads(row["value"])
-    return settings["enabled"] and (
-        settings["mode"] == "free" or str(channel) in list(map(str, settings["channels"]))
-    )
+    """Legacy settings remain readable; unsolicited public engagement is removed."""
+    return False

@@ -21,6 +21,7 @@ from ..v2 import persona
 from ..v2.store import dumps, uid
 from .config import Secrets, save_config
 from .panel import Panel
+from .instructions import get as personal_instructions
 
 LOG = logging.getLogger("kei.commands")
 
@@ -108,6 +109,8 @@ class Access:
                 )
                 # Explicit chat shadows old config assignments as well as current DB grants.
                 self.grant(issuer, subject, server, "chat")
+                from .permissions import save
+                save(self.db,self.engine.cfg,issuer,subject,server,'minecraft','read_only',False)
                 self.record(server, subject, issuer, "admin_revoke", "chat")
 
     def revoke(self, issuer, subject, server):
@@ -120,7 +123,16 @@ class Access:
             self.delegate(issuer, subject, server, False)
             return
         self.grant(issuer, subject, server, "chat")
+        from .permissions import save
+        save(self.db,self.engine.cfg,issuer,subject,server,'minecraft','read_only',False)
         self.record(server, subject, issuer, "revoke", "chat")
+
+    def set_policy(self,issuer,subject,server,extent,level):
+        if not self.owner(issuer,server):raise PermissionError('Chỉ chủ server được đổi phạm vi và mức thực thi.')
+        from .permissions import save
+        tool=self.engine.tools.get(server);has_ssh=bool(getattr(tool,'cs',{}).get('ssh'))
+        save(self.db,self.engine.cfg,issuer,subject,server,extent,level,has_ssh)
+        self.record(server,str(subject),str(issuer),'execution_policy',extent+':'+level)
 
     def visible(self, user, scope=None):
         assigned = set(self.engine.assigned(str(user)))
@@ -143,7 +155,7 @@ class Access:
                 "SELECT * FROM kei_server_admins WHERE server=? AND revoked IS NULL", (server,)
             )
         }
-        return [
+        entries = [
             {
                 **g,
                 "admin": g["subject"] in admins,
@@ -151,6 +163,26 @@ class Access:
             }
             for g in grants
         ]
+        profile=self.engine.servers[server]
+        people={entry['subject']:entry for entry in entries}
+        registered=self.db.one('SELECT owner FROM kei_registered_servers WHERE id=?',(server,))
+        owners=set(map(str,profile.get('owners',[])))|{str(self.engine.cfg['owner_id'])}
+        if registered:owners.add(registered['owner'])
+        for subject in owners:
+            people[subject]={**people.get(subject,{}),'subject':subject,'level':self.engine.permission(subject,server),'issuer':'','owner':True,'admin':True}
+        for subject, assigned in self.engine.cfg.get('assignments',{}).items():
+            if server in assigned and str(subject) not in people:
+                people[str(subject)]={'subject':str(subject),'level':self.engine.permission(str(subject),server),'issuer':'','configured':True,'admin':str(subject) in admins}
+        for subject in admins:
+            people.setdefault(subject,{'subject':subject,'level':self.engine.permission(subject,server),'issuer':admins[subject]['issuer'],'admin':True})
+        for entry in people.values():
+            from .permissions import policy
+            entry['execution']=policy(self.db,self.engine.cfg,entry['subject'],server)
+            entry['role']='owner' if entry.get('owner') else 'admin' if entry.get('admin') else entry['level']
+            entry['permissions']=['Xem trạng thái, TPS/RAM và đọc log'] if entry['level'] in ('observe','copilot') else ['Trò chuyện với Kei']
+            if entry['level']=='copilot':entry['permissions'].append('Nhờ thay cấu hình và chạy lệnh trên server; việc nhạy cảm vẫn cần xác nhận')
+            if entry.get('admin'):entry['permissions'].append('Cấp và thu hồi quyền trên server này')
+        return sorted(people.values(),key=lambda e:(not e.get('owner'),e['subject']))
 
 
 class UserExperience:
@@ -163,9 +195,35 @@ class UserExperience:
         self.engine.access = self.access
         self.pending_connections = {}
         self.dashboard = None
+        self.people_cache = {}
 
     def person(self, user):
         return self.engine.identity.resolve("discord", str(user))
+
+    async def public_person(self, user, server=None):
+        user=str(user);cached=self.people_cache.get(user)
+        if cached and cached[0]>time.time():return cached[1]
+        from ..v2.identity import identity_record, sync_identity
+        record=identity_record(self.db,user)
+        result={'id':user,'display_name':record.get('display_name') or 'Tài khoản Discord','username':record.get('username') or '', 'avatar_url':None}
+        account=getattr(self.bot,'get_user',lambda _:None)(int(user))
+        if account is None and hasattr(self.bot,'fetch_user'):
+            try:account=await self.bot.fetch_user(int(user))
+            except discord.HTTPException:pass
+        if account:
+            sync_identity(self.db,account)
+            result.update(display_name=str(getattr(account,'global_name',None) or account.display_name),username=str(account.name))
+            avatar=str(account.display_avatar.url)
+            if urlsplit(avatar).scheme=='https' and urlsplit(avatar).hostname=='cdn.discordapp.com':result['avatar_url']=avatar
+        self.people_cache[user]=(time.time()+300,result)
+        return result
+
+    async def access_preview(self,user,server,subject):
+        if not self.access.manager(str(user),server):raise PermissionError('Bạn chưa được quản lý quyền trên server này.')
+        if not str(subject).isdigit() or len(str(subject))>22:raise ValueError('Nhập Discord ID hoặc dán mention của người muốn thêm.')
+        account=await self.public_person(str(subject),server)
+        existing=next((g for g in self.access.entries(str(user),server) if g['subject']==str(subject)),None)
+        return {'person':account,'existing':existing}
 
     def state(self, user, scope=None):
         user = str(user)
@@ -185,12 +243,15 @@ class UserExperience:
                     "name": p.get("name", sid),
                     "level": self.engine.permission(user, sid),
                     "owner": self.access.owner(user, sid),
+                    "host_available": bool(getattr(self.engine.tools.get(sid),'cs',{}).get('ssh')),
+                    "can_grant_host": __import__('minecraft_agent.v3.permissions',fromlist=['static_host']).static_host(self.cfg,user,sid),
                     "manage_access": self.access.manager(user, sid),
                     "capabilities": self.engine.tools[sid].capabilities(),
                 }
             )
         return {
             "user": user,
+            "custom_instructions": personal_instructions(self.db,self.person(user)),
             "persona": persona.mode(self.db, user),
             "debug": self.engine.progress.mode(user),
             "preferences": {k: v for k, v in pref.items() if k != "person"},
@@ -218,10 +279,13 @@ class UserExperience:
             "default_server",
             "rank_notifications",
             "romantic_opt_in",
+            "custom_instructions",
         }
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError("Thiết lập không hợp lệ.")
-        pref = {k: v for k, v in values.items() if k not in {"persona", "debug", "default_server"}}
+        pref = {k: v for k, v in values.items() if k not in {"persona", "debug", "default_server", "custom_instructions"}}
+        if 'custom_instructions' in values and (not isinstance(values['custom_instructions'],str) or len(values['custom_instructions'])>2000):
+            raise ValueError('Lời dặn riêng tối đa 2.000 ký tự.')
         for key in ("dm_opt_in", "muted", "rank_notifications", "romantic_opt_in"):
             if key in pref and type(pref[key]) is not bool:
                 raise ValueError(key + " cần true hoặc false.")
@@ -242,6 +306,9 @@ class UserExperience:
                 raise ValueError("Múi giờ chưa hợp lệ. Ví dụ: Asia/Ho_Chi_Minh.") from exc
         # Validate everything before changing multiple personal preferences.
         with self.db.atomic():
+            if 'custom_instructions' in values:
+                from .instructions import set as save_instructions
+                save_instructions(self.db,self.person(user),values['custom_instructions'])
             if pref:
                 self.engine.memory.set_preference(self.person(user), **pref)
             if "persona" in values:
@@ -765,7 +832,7 @@ class UserExperience:
             if not interaction.guild_id
             else f"guild:{interaction.guild_id}:{interaction.channel_id}"
         )
-        view = SettingsView(self, user, scope)
+        view = SetupView(self, user, scope) if setup else SettingsView(self, user, scope)
         text = (
             "Ba bước là đủ: chọn cách nói chuyện → link Minecraft nếu muốn → chọn hoặc nối server. Không cần có server để chat."
             if setup
@@ -773,7 +840,7 @@ class UserExperience:
         )
         await interaction.followup.send(
             text,
-            embed=self.embed(user, scope),
+            embed=view.intro() if setup else self.embed(user, scope),
             view=view,
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
@@ -809,7 +876,7 @@ class SettingsView(discord.ui.View):
         super().__init__(timeout=600)
         self.ux, self.user, self.scope = ux, str(user), scope
         section = discord.ui.Select(
-            placeholder="Chọn mục / Choose a setting",
+            placeholder="Bạn muốn chỉnh gì?",
             options=[
                 discord.SelectOption(label=label, value=value, default=value == page)
                 for value, label in (
@@ -817,7 +884,7 @@ class SettingsView(discord.ui.View):
                     ("persona", "Tính cách & tiến độ"),
                     ("participation", "Tham gia & thông báo"),
                     ("privacy", "Quyền riêng tư"),
-                    ("memory", "Memory"),
+                    ("memory", "Những chuyện đã nhớ"),
                     ("profile", "Quan hệ với Kei"),
                     ("accounts", "Tài khoản Minecraft"),
                     ("servers", "Server & kiểm tra kết nối"),
@@ -833,6 +900,14 @@ class SettingsView(discord.ui.View):
 
         section.callback = choose
         self.add_item(section)
+        if page == 'home':
+            for target,label in (('persona','Cách nói chuyện'),('profile','Chuyện hai người'),('servers','Minecraft'),('admins','Người có quyền'),('tasks','Lịch hẹn')):
+                async def open_page(interaction, target=target):await self.show(interaction,target)
+                self.button(label,open_page)
+            self.web_button()
+        else:
+            async def back(interaction):await self.show(interaction,'home')
+            self.button('← Các mục khác',back)
         if page == "persona":
             self.choice(
                 "Cách nói chuyện",
@@ -844,15 +919,15 @@ class SettingsView(discord.ui.View):
                 "debug",
                 [("off", "Ẩn"), ("minimal", "Chỉ checklist"), ("advanced", "Checklist + lệnh/log")],
             )
+            self.button('Lời dặn riêng',lambda i:i.response.send_modal(InstructionsModal(ux,user)))
         elif page == "participation":
             self.choice("Chủ động nhắn DM", "dm_opt_in", [(True, "Cho phép"), (False, "Tắt")])
             self.choice(
                 "Cho Kei trả lời bạn", "muted", [(False, "Bình thường"), (True, "Để mình yên")]
             )
-            self.choice("Thông báo rank", "rank_notifications", [(True, "Bật"), (False, "Tắt")])
+            self.choice("Chuyển biến quan hệ ↑ / ↓", "rank_notifications", [(True, "Hiện dòng nhỏ"), (False, "Tắt")])
             self.button("Múi giờ", lambda i: i.response.send_modal(TimezoneModal(ux, user)))
-            if scope.startswith("guild:"):
-                self.button("Kei trong kênh này", self.ambient)
+
         elif page == "privacy":
             self.choice(
                 "Dùng memory giữa các ngữ cảnh",
@@ -884,6 +959,7 @@ class SettingsView(discord.ui.View):
                 )
         elif page == "admins" and any(s["manage_access"] for s in ux.state(user, scope)["servers"]):
             self.button("Cấp hoặc thu hồi", lambda i: i.response.send_modal(AccessModal(ux, user)))
+            self.web_button()
         elif page == "diagnostics" and str(user) == str(ux.cfg["owner_id"]):
             self.button("Bật đăng nhập Web", self.oauth)
 
@@ -902,6 +978,11 @@ class SettingsView(discord.ui.View):
         )
         button.callback = callback
         self.add_item(button)
+
+    def web_button(self):
+        url=self.ux.cfg.get('web',{}).get('public_url','')
+        if url.startswith('https://'):
+            self.add_item(discord.ui.Button(label='Mở trang thiết lập',url=url))
 
     def choice(self, placeholder, key, options):
         choice = discord.ui.Select(
@@ -1062,6 +1143,44 @@ class SettingsView(discord.ui.View):
             view=view,
             ephemeral=True,
         )
+
+
+class SetupView(SettingsView):
+    def __init__(self,ux,user,scope,step=0):
+        self.step=step
+        super().__init__(ux,user,scope,('persona','accounts','servers')[step])
+        if step:
+            async def previous(i):await self.move(i,self.step-1)
+            self.button('← Bước trước',previous)
+        async def advance(i):
+            if self.step<2:await self.move(i,self.step+1)
+            else:await self.show(i,'home')
+        self.button('Tiếp theo →' if step<2 else 'Xong rồi',advance)
+        self.web_button()
+
+    def intro(self):
+        titles=('1/3 · Nói chuyện cho hợp ý','2/3 · Liên kết Minecraft nếu bạn chơi','3/3 · Chọn server nếu cần')
+        copies=('Chọn cách Kei trả lời và hiện tiến độ ở bên dưới. Bạn cũng có thể nói thẳng “gọi mình là anh” hoặc “trả lời ngắn thôi” trong chat. Giữ mặc định cũng được.',
+                'Tạo mã rồi nhập lệnh đó trong Minecraft sau khi đăng nhập. Server cần plugin Kei. Chưa chơi hoặc chưa cài plugin? Bấm Tiếp theo để bỏ qua.',
+                'Chọn server đã được cấp quyền hoặc kết nối Panel nếu bạn là chủ. Chưa có server vẫn chat được bình thường. Xong rồi, thử nhắn “Kei ơi” nhé.')
+        return discord.Embed(title=titles[self.step],description=copies[self.step],color=0xEFA5A5)
+
+    async def move(self,interaction,step):
+        view=SetupView(self.ux,self.user,self.scope,step)
+        await interaction.response.edit_message(content=None,embed=view.intro(),view=view,allowed_mentions=discord.AllowedMentions.none())
+
+
+class InstructionsModal(discord.ui.Modal,title='Lời dặn riêng cho Kei'):
+    def __init__(self,ux,user):
+        super().__init__();self.ux,self.user=ux,str(user)
+        self.text=discord.ui.TextInput(label='Muốn Kei lưu ý điều gì khi nói chuyện?',style=discord.TextStyle.paragraph,required=False,max_length=2000,default=personal_instructions(ux.db,ux.person(user)),placeholder='Ví dụ: gọi mình là anh; trả lời ngắn khi mình đi học.')
+        self.add_item(self.text)
+
+    async def on_submit(self,interaction):
+        if str(interaction.user.id)!=self.user:
+            await interaction.response.send_message('Lời dặn này không thuộc tài khoản của bạn.',ephemeral=True);return
+        self.ux.update(self.user,{'custom_instructions':str(self.text)})
+        await interaction.response.send_message('Đã lưu lời dặn riêng. Để trống rồi lưu nếu muốn xóa; lời dặn không thay quyền server hoặc tính cách gốc.',ephemeral=True)
 
 
 class OAuthSecretModal(discord.ui.Modal, title="Bật Discord login cho Web"):
