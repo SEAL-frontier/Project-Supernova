@@ -93,6 +93,35 @@ Start/restart requires the matching process **and a fresh `Done (...)` startup
 line**; an old startup line is not accepted. A timeout is reported as uncertain,
 so inspect the process/log before retrying.
 
+## General SSH shell is a separate host privilege
+
+Server ownership, delegated administration and copilot permission authorize the
+selected server's typed file/console operations. They do **not** grant a general
+shell on the machine hosting it. An SSH command's working directory is not a
+sandbox, especially when the connection uses root or sudo.
+
+Only the bot's global `owner_id` can use general `remote_shell` by default. The
+operator can explicitly authorize another Discord identity in that server's
+private configuration:
+
+```yaml
+servers:
+  - id: survival
+    host_admins: ['YOUR_TRUSTED_HOST_ADMIN_DISCORD_ID']
+    # Keep the server's existing connectors and other fields here.
+```
+
+`host_admins` is an **operator-edited config field**, not a Discord/Web setting.
+A registered Panel profile, relationship rank or server owner cannot grant it.
+The user must still have the ordinary server assignment; it is checked again
+before dispatch. Verification readbacks cannot bypass this host-shell gate.
+Leave the list empty for ordinary delegated server admins. Host-wide disk and
+process investigations remain available to the global operator or explicit host
+admins; server file and console tools remain available under normal scoped rights.
+
+Quyền quản trị một server không phải quyền root của cả host. Chỉ operator sửa
+`host_admins` trong config riêng; `/settings` và Web UI không tự cấp quyền này.
+
 ## Choosing the right server
 
 IDs and names/aliases are matched exactly. Guild defaults are checked against

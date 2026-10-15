@@ -55,6 +55,11 @@ class Secrets:
 
 def normalize_profile(p):
     p = copy.deepcopy(p)
+    if 'host_admins' in p:
+        admins = p['host_admins']
+        if not isinstance(admins, list) or any((not str(user).isdigit() for user in admins)):
+            raise ValueError('host_admins must be a list of Discord user IDs in operator config')
+        p['host_admins'] = list(dict.fromkeys(map(str, admins)))
     p.setdefault('name', p.get('id', 'Server'))
     cs = p.setdefault('connectors', {})
     if p.get('wings_url'):

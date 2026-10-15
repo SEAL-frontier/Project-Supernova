@@ -1,8 +1,18 @@
 # Changelog
 
-Current public version: **3.1.0-rc.1**. Architecture: **Supernova**.
+Current public version: **3.1.0-rc.2**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.1.0-rc.2 — Web you can actually read
+
+- Responsive silver, pink and crimson dashboard with plain-language setup, local avatar and accessible interaction.
+- Reusable public branding; production names, community links and credentials stay in private configuration.
+- Private early acknowledgments and graceful command failures; refresh slash commands after Gateway connects.
+- Host shell requires operator-issued host access, separately from server-scoped delegation.
+- Clean-clone Docker/setup/Discord/model/Panel read integration verified; production OAuth tracked separately.
+- Keeps the protocol-1 bridge artifact from 3.1.0-rc.1; backend update needs no Minecraft restart.
+- Still a release candidate; see FEATURE_MATRIX.md for verified and partial scope.
 
 ## 3.1.0-rc.1 — Follow the conversation, not the last message
 

@@ -9,6 +9,7 @@
 | Wings | Existing daemon URL/token + UUID | Compatibility with 2.x installations |
 | SSH | Host + account + key/password | Host diagnostics; volume discovery; file/shell access |
 | Bridge | Plugin JAR + generated pairing config | In-game chat, live JVM/TPS/players, console and files |
+| Local | Explicit accessible server folder, optional registered process actions | Scoped file access without SSH; process control only where actually available |
 
 Kei chooses by capability, not by flipping a coin. Bridge metrics describe the Minecraft
 JVM; they are not the entire host's RAM. Plugin-only cannot start a server that is offline.
@@ -37,9 +38,9 @@ playwright install chromium
 Docker alternative:
 
 ```sh
-docker build -t keys-keys:3.1.0-rc.1 .
-docker build -f Dockerfile.browser -t keys-keys:3.1.0-rc.1-browser .
-docker run --rm -it -v "$PWD/data:/app/data" keys-keys:3.1.0-rc.1-browser server add --kind panel
+docker build -t keys-keys:3.1.0-rc.2 .
+docker build -f Dockerfile.browser -t keys-keys:3.1.0-rc.2-browser .
+docker run --rm -it -v "$PWD/data:/app/data" keys-keys:3.1.0-rc.2-browser server add --kind panel
 ```
 
 2FA/captcha is an authentication blocker, not an invitation to disable it. A verified
@@ -59,6 +60,18 @@ account; a key-only account needs passwordless sudo for those operations.
 Volume discovery is bounded to common server directories. If the host uses a custom
 layout, enter that directory. General SSH access does not magically create a Minecraft
 console endpoint; use the bridge or Panel for reliable console access.
+
+## Local files without SSH
+
+```sh
+keys-keys server add --kind local
+```
+
+Enter the absolute server directory visible from the bot and start read-only. Inside
+a container this is the mount destination, not the host path. Windows can use an
+ordinary absolute folder path; no custom EXE is required. Live Minecraft commands
+and TPS need the bridge or Panel. See [local access](LOCAL_ACCESS.md) for permission,
+container and registered-launcher examples.
 
 ## Missing or uncertain results
 

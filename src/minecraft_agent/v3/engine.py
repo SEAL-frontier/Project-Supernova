@@ -80,6 +80,15 @@ class Engine(LegacyEngine):
             return explicit['level']
         return 'copilot' if server in super().assigned(subject) else 'chat'
 
+    def host_shell_allowed(self, user, server):
+        """Host privilege comes from operator config, never server ownership or rank."""
+        subject = self.subject(user)
+        if subject == str(self.cfg['owner_id']):
+            return True
+        profile = next((p for p in self.cfg['servers'] if p['id'] == server), {})
+        admins = profile.get('host_admins', [])
+        return isinstance(admins, list) and subject in set(map(str, admins))
+
     def select(self, user, scope, requested=None):
         selected = self.db.one('SELECT server FROM kei_selected WHERE scope=?', (scope,))
         return resolve_server(self.servers, self.assigned(user), scope, requested, selected['server'] if selected else None, self.cfg.get('guild_defaults', {}))
@@ -324,6 +333,8 @@ class Engine(LegacyEngine):
             return {'error': 'Assignment revoked before dispatch', 'verified': False}
         if mode == 'change' and self.permission(task['requester'], task['server']) != 'copilot':
             return {'error': 'Change permission revoked', 'verified': False}
+        if name == 'remote_shell' and (not self.host_shell_allowed(task['requester'], task['server'])):
+            return {'error': 'General host shell requires the bot operator or operator-configured host_admins. Use scoped files/console tools for this server.', 'verified': False}
         origin = self.db.one('SELECT * FROM kei_task_context WHERE task=?', (k,))
         if origin and origin['platform'] == 'minecraft':
             person = self.identity.resolve('minecraft', origin['actor'], origin['server'])
@@ -340,6 +351,9 @@ class Engine(LegacyEngine):
         if not original:
             return {'error': 'No completed mutation with this action_id in this task', 'verified': False}
         name = args['check_tool']
+        task = self.db.one('SELECT requester,server FROM kei_tasks WHERE id=?', (k,))
+        if name == 'remote_shell' and (not task or not self.host_shell_allowed(task['requester'], task['server'])):
+            return {'error': 'Host-shell verification requires the bot operator or operator-configured host_admins. Use a scoped files/console readback.', 'verified': False}
         check = json.loads(args['check_args_json'])
         if name not in ('inspect', 'files', 'console', 'remote_shell') or effect_of(name, check) != 'read':
             return {'error': 'Verification check must be read-only', 'verified': False}

@@ -69,6 +69,28 @@ Login requests only Discord **identify** and **guilds**. OAuth tokens and creden
 
 OAuth reference: [Discord OAuth2 documentation](https://discord.com/developers/docs/topics/oauth2).
 
+### Make this deployment yours
+
+The silver, soft pink and crimson web theme ships with a small local Kei illustration. It does not fetch an avatar, font or UI library from somebody else's server. The public project defaults are reusable; deployment names and community invites belong in your own private config:
+
+```yaml
+web:
+  # Keep the OAuth/listener settings above.
+  branding:
+    name: keys keys
+    bot_name: Kei
+    deployment_label: My Minecraft copilot
+    tagline: Her problem. Your server.
+    repo_url: https://github.com/TonyBucket/keys-keys
+    community_url: ""
+```
+
+Optional `intro` replaces the short introduction. Names and copy are escaped as text. Repository links require HTTPS; `community_url` accepts a real `https://discord.gg/...` or `https://discord.com/invite/...` invite. Leave it empty to hide the community link. There is no default invite to somebody else's server.
+
+The landing page explains what the project is and why it exists before setup. Its conversation examples run locally in the browser; they send no messages or model requests. Once signed in, the same screen opens personal settings, relationship/memory, Minecraft and schedules. Tabs support keyboard navigation, and animation respects reduced-motion preferences.
+
+For custom deployments that copy the Python source directly, include `minecraft_agent/v3/web_assets/kei.png` along with the Python modules. Wheels and the supplied Dockerfile package this asset automatically. The image is the existing project artwork; the code's MIT license does not relicense it.
+
 When the OAuth app secret or client ID is missing, the landing page remains readable and explains that Discord login is not ready. Login, callbacks and private APIs return 503; there is no anonymous setup or settings access. An invalid public URL or callback prevents the listener starting. Slash-command setup continues working in either case. A successful local HTTP test is not proof that your production Discord OAuth callback has been configured.
 
 ## Tiếng Việt: dùng nhanh

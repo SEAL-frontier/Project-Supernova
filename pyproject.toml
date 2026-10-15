@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "keys-keys"
-version = "3.1.0-rc.1"
+version = "3.1.0-rc.2"
 description = "An open-source Adaptive Hybrid Minecraft Server Copilot"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,6 +29,9 @@ panel-login = ["playwright>=1.48,<2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"minecraft_agent.v3" = ["web_assets/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -9,6 +9,7 @@ import asyncio
 import copy
 import hashlib
 import json
+import logging
 import re
 import time
 from urllib.parse import urlsplit
@@ -20,6 +21,8 @@ from ..v2 import persona
 from ..v2.store import dumps, uid
 from .config import Secrets, save_config
 from .panel import Panel
+
+LOG = logging.getLogger("kei.commands")
 
 
 class Access:
@@ -701,6 +704,7 @@ class UserExperience:
 
     def register(self):
         self.bot.tree.remove_command("setup")
+        self.bot.tree.error(self.command_error)
 
         @app_commands.command(
             name="setup",
@@ -725,13 +729,14 @@ class UserExperience:
             name="tasks", description="Xem, tạo hoặc tạm dừng lịch hẹn của riêng bạn"
         )
         async def tasks(interaction: discord.Interaction):
+            await interaction.response.defer(ephemeral=True, thinking=True)
             user = str(interaction.user.id)
             scope = (
                 "dm:" + user
                 if not interaction.guild_id
                 else f"guild:{interaction.guild_id}:{interaction.channel_id}"
             )
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 embed=tasks_embed(self, user),
                 view=TasksView(self, user, scope, str(interaction.channel_id)),
                 ephemeral=True,
@@ -743,6 +748,9 @@ class UserExperience:
         self.bot.tree.add_command(tasks)
 
     async def home(self, interaction, setup=False):
+        # Acknowledge before loading identity/profile/server data. An unavailable
+        # backend should result in a private error, not an expired interaction.
+        await interaction.response.defer(ephemeral=True, thinking=True)
         user = str(interaction.user.id)
         scope = (
             "dm:" + user
@@ -755,13 +763,26 @@ class UserExperience:
             if setup
             else None
         )
-        await interaction.response.send_message(
+        await interaction.followup.send(
             text,
             embed=self.embed(user, scope),
             view=view,
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
         )
+
+    async def command_error(self, interaction, error):
+        original = getattr(error, "original", error)
+        command = getattr(getattr(interaction, "command", None), "qualified_name", "unknown")
+        LOG.warning("COMMAND_FAILED command=%s type=%s", command, type(original).__name__)
+        text = "Kei chưa mở được mục này. Thử lại bằng /settings; nếu vẫn lỗi, báo operator kiểm tra log nhé."
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(text, ephemeral=True)
+            else:
+                await interaction.response.send_message(text, ephemeral=True)
+        except discord.HTTPException as exc:
+            LOG.warning("COMMAND_ERROR_REPLY_FAILED type=%s", type(exc).__name__)
 
     async def start(self):
         from .dashboard import Dashboard

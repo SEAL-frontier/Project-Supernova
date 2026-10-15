@@ -1,4 +1,4 @@
-# Supernova 3.1.0-rc.1 — acceptance
+# Supernova 3.1.0-rc.2 — acceptance
 
 This round extends the existing architecture and preserves private persona/data. See FEATURE_MATRIX.md for implemented/partial boundaries.
 

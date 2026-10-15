@@ -5,8 +5,8 @@ waiting for a model to finish its sentence.
 
 ## Install
 
-1. Download `keys-keys-bridge-3.0.0-rc.1.jar` from this release, or build `bridge/` with Maven and Java 21.
-2. Put the JAR into the server's `plugins/` directory.
+1. Download [`keys-keys-bridge-3.1.0-rc.1.jar`](https://github.com/TonyBucket/keys-keys/releases/download/v3.1.0-rc.1/keys-keys-bridge-3.1.0-rc.1.jar), or build `bridge/` with Maven and Java 21. Use the shaded JAR, not the `original-...jar` build intermediate.
+2. Stop Minecraft normally, then put the JAR into the server's `plugins/` directory.
 3. Run `keys-keys server add --kind bridge` on the bot host. For an existing server, enter its existing ID.
 4. Copy the generated `data/bridge-configs/SERVER/config.yml` to `plugins/KeysKeysBridge/config.yml`.
 5. Restart Minecraft normally. Do not hot reload the plugin.
@@ -15,7 +15,7 @@ waiting for a model to finish its sentence.
 Target: Paper API 1.21.11, including the Leaf deployment used for acceptance. Other versions
 and Folia are not implied by that target; verify compatibility before deployment.
 
-Backend rc.2 uses the same protocol-v1 / rc.1 JAR. Updating only the Python backend does not require restarting Minecraft.
+The new `3.1.0-rc.1` JAR and the previously distributed `3.0.0-rc.1` JAR both use bridge protocol 1. An existing compatible plugin can keep running when only the Python backend is upgraded; that does not mean the installed JAR has changed version. New installations should use the current artifact linked above. See [the step-by-step install guide](BRIDGE_INSTALL.md) for pairing, checks and troubleshooting.
 
 ## Network
 

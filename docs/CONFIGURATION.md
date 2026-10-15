@@ -46,13 +46,24 @@ bridge:
 
 Wizard answer keys for a private unattended JSON file: `language`, `timezone`,
 `discord_token`, `provider_base`, `provider_key`, `provider_model`, `owner_id`,
-`persona_file`, `persona`, `connection`. `connection` is `chat`, `panel`, `ssh` or `bridge`.
+`persona_file`, `persona`, `connection`. `connection` is `chat`, `panel`, `ssh`, `bridge` or `local`.
 
 Panel answers: `panel_url`, `panel_auth` (`key`, `password`, `session`), `panel_key`,
 `panel_username`, `panel_password`, `session_file`, `server_index` (1-based), `server_id`.
 SSH answers: `ssh_host`, `ssh_port`, `ssh_user`, `ssh_auth`, `ssh_key`, `ssh_password`,
 `trust_host_key`, `ssh_volume` or `volume_index`, `minecraft_version`, `server_name`, `server_id`.
 Bridge answers: `server_name`, `server_id`, `bridge_port`, `bridge_url`.
+Local answers: `local_root` (an absolute path visible to the bot), `local_writable`
+(`no` by default; `yes` to allow file edits), `server_name`, `server_id`.
+
+```sh
+keys-keys server add --kind local
+```
+
+A shared physical host does not imply shared container paths or processes. The local
+wizard checks the directory the bot can actually read. Process actions require explicit
+operator registration; a mounted folder alone does not supply live TPS or console.
+See [local access](LOCAL_ACCESS.md) for Linux, Windows and bind mounts.
 
 Only include fields the selected path asks for. Credential values belong in a private
 answer file, never a checked-in example. Interactive prompts hide terminal secrets.

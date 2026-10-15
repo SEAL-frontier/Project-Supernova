@@ -295,16 +295,28 @@ class Kei(LegacyKei):
             await interaction.response.send_message('Đã nhận owner. Dùng /server connect để thêm server.' if valid else 'Mã sai, hết hiệu lực hoặc bot đã có owner.', ephemeral=True)
         self.tree.add_command(claim)
 
+    async def on_interaction(self, interaction):
+        if interaction.type == discord.InteractionType.application_command:
+            name = (interaction.data or {}).get('name', 'unknown')
+            if name not in {c.name for c in self.tree.get_commands()}:
+                name = 'unknown'
+            LOG.info('SLASH_RECEIVED command=%s', name)
+        await super().on_interaction(interaction)
+
     async def setup_hook(self):
         await super().setup_hook()
         await self.bridge.start()
         await self.ux.start()
+        self.bg.extend([asyncio.create_task(self.sync_commands()), asyncio.create_task(self.social_outbox()), asyncio.create_task(self.social_background()), asyncio.create_task(self.scheduler_loop())])
+
+    async def sync_commands(self):
+        await self.wait_until_ready()
         try:
             for command in self.tree.get_commands():
                 await self.http.upsert_global_command(self.application_id, command.to_dict(self.tree))
+            LOG.info('SLASH_REGISTRATION_COMPLETE count=%s', len(self.tree.get_commands()))
         except discord.HTTPException as exc:
             LOG.warning('Command registration deferred: %s', type(exc).__name__)
-        self.bg.extend([asyncio.create_task(self.social_outbox()), asyncio.create_task(self.social_background()), asyncio.create_task(self.scheduler_loop())])
 
     async def on_ready(self):
         await super().on_ready()

@@ -1,4 +1,4 @@
-# Supernova 3.1.0-rc.1 — feature matrix
+# Supernova 3.1.0-rc.2 — feature matrix
 
 Implemented = a code path with evidence. Partial = an important acceptance gap remains. This is a prerelease; transport mocks are not production proof.
 
@@ -18,14 +18,14 @@ Implemented = a code path with evidence. Partial = an important acceptance gap r
 | Episodic memory, reflection, forgetting | Implemented | Source excerpts, origin/resolution, FTS, atomic cursor, tombstones | Multi-day tests pass; multi-week field evidence remains open |
 | Group intelligence | Partial | Observed participants/activity and sourced social observations | Not a complete social graph; no inferred motives as facts |
 | Proactive conversation | Partial | Opt-in DMs, quiet hours, caps and unanswered suppression | Reasons mainly commitments/episodes; general public initiative deferred |
-| /setup and /settings | Implemented | Guided private UI, CLI retained; real HTTP integration tests | Independent novice installation still needed |
-| Delegated administrators | Implemented | Owner-issued revocable server scopes, grantor/history, backend checks | Guild/relationship ranks do not grant host access |
-| Responsive OAuth dashboard | Partial | aiohttp, server-side identity/CSRF/access; HTTP fixture OAuth + real Panel-client integration | Real production Discord login needs client secret and authorized callback |
+| /setup and /settings | Implemented | Guided private UI, early private acknowledgments, safe error replies; CLI and real HTTP integration | Independent novice installation and another human slash-command check still needed |
+| Delegated administrators | Implemented | Owner-issued revocable server scopes, grantor/history; host-shell gate also covers verification | General SSH requires operator or static host_admins; server/rank/UI profiles cannot grant it |
+| Responsive OAuth dashboard | Partial | Responsive branded UI; server-side identity/CSRF/access; real HTTP integration and Discord-accepted OAuth secret | Full production browser login/callback acceptance tracked separately |
 | Scheduled agent tasks | Implemented | Chat, /tasks and UI; once/daily/weekly/cron, timezone, clock confirmation | Permission rechecked at execution; sensitive steps still require approval |
 | Durable scheduling | Implemented | Unique occurrences, recovery, bounded read retries, no blind mutation replay | Actual confirmed scheduled agent read ran in isolated staging; alarm receipt proves sending only |
 | Panel User API + SSH | Implemented | Real status/console/file reads and task history | Password/challenge fallback varies by deployment |
 | Local access without SSH | Partial | Real Windows FS/process and Linux-container FS/process checks; explicit roots/argv | Native non-container Linux and full mixed-OS networking not separately exercised |
-| Paper/Leaf plugin artifact | Implemented | Packaged JAR3.1.0-rc.1; real Leaf/AuthMe/Minecraft-client/TPS/files checks | Protocol1 compatible; existing production rc.1 JAR retained without unnecessary restart |
+| Paper/Leaf plugin artifact | Implemented | Packaged JAR3.1.0-rc.1; real Leaf/AuthMe/Minecraft-client/TPS/files checks | Backend rc.2 keeps protocol1; existing production rc.1 JAR retained without unnecessary restart |
 | Multi-server foundations | Implemented | IDs/names/aliases, guild mappings/defaults, scoped permission, ambiguity asks | Advanced fleet orchestration deferred |
 | Search UX and source counts | Implemented | Edited -# status; actual 3 page fetches across 2 sites | Failed fetches/results-only URLs do not increase fetched-site count |
 | Agent/approval/audit/verification | Implemented | Existing workflow retained; actual scheduled read and fresh TPS receipt | Not every arbitrary plugin/profiler workflow is accepted yet |

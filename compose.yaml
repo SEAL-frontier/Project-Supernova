@@ -1,7 +1,7 @@
 services:
   keys-keys:
     build: .
-    image: keys-keys:3.1.0-rc.1
+    image: keys-keys:3.1.0-rc.2
     restart: unless-stopped
     volumes:
       - ./data:/app/data
