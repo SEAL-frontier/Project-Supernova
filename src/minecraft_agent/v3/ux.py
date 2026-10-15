@@ -494,6 +494,8 @@ class UserExperience:
                 p.get("rank", {}).get("reason")
                 or "Quan hệ thay đổi theo những cuộc trò chuyện có ý nghĩa."
             )
+            if embed.description == "No established rank change yet.":
+                embed.description = "Chưa có thay đổi quan hệ đủ rõ để đổi rank."
             dims = p.get("dimensions", {})
             labels = {
                 "familiarity": "Quen thuộc",
@@ -521,10 +523,16 @@ class UserExperience:
                     inline=False,
                 )
             episodes = p.get("memories", [])[:4]
+            episode_labels = {
+                "warm_exchange": "Một chuyện đáng nhớ", "nickname": "Chuyện biệt danh",
+                "milestone": "Một dấu mốc", "conflict": "Lúc không vui",
+                "reconciliation": "Chuyện làm hòa", "commitment": "Điều đã hứa",
+                "inside_joke": "Chuyện đùa của hai người",
+            }
             embed.add_field(
                 name="Chuyện chung",
                 value="\n".join(
-                    "• " + str(r.get("title") or r.get("summary", ""))[:160] for r in episodes
+                    "• " + episode_labels.get(str(r.get("title")), str(r.get("title") or r.get("summary", "")))[:160] for r in episodes
                 )
                 or "Chưa có episode đã chọn lưu trong cuộc trò chuyện này.",
                 inline=False,

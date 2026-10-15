@@ -212,7 +212,7 @@ function renderServers(){
 function updateTaskMode(){$('task-server').disabled=$('task-mode').value==='alarm';}
 $('task-mode').onchange=updateTaskMode;
 const episodeTitles={warm_exchange:'Một chuyện đáng nhớ',nickname:'Chuyện biệt danh',milestone:'Một dấu mốc',conflict:'Lúc không vui',reconciliation:'Chuyện làm hòa',commitment:'Điều đã hứa',inside_joke:'Chuyện đùa của hai người'};
-function friendlyMemoryTitle(title){return episodeTitles[title]||title||'Chuyện đáng nhớ';}
+function friendlyMemoryTitle(title){return Object.prototype.hasOwnProperty.call(episodeTitles,title)?episodeTitles[title]:title||'Chuyện đáng nhớ';}
 function friendlyRankReason(reason){return !reason||reason==='No established rank change yet.'?'Chưa có thay đổi quan hệ đủ rõ để đổi rank.':reason;}
 async function loadProfile(){
  const profile=await api('/api/profile');$('relationship-rank').textContent=profile.rank?.label||'Neutral';$('relationship').textContent=friendlyRankReason(profile.rank?.reason);$('dimensions').replaceChildren();
