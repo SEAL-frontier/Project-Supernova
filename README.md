@@ -10,7 +10,7 @@
 
 Actually, her problem. Your server. We got the custody arrangement wrong. 😭
 
-![Version](https://img.shields.io/badge/version-3.0.0--rc.2-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-3.1.0--rc.1-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
@@ -60,6 +60,13 @@ a repository. Terrible naming process. Excellent commitment to the bit. 🥀
 
 The experimental character/avatar is **Tendou Kei**. Your persona is yours to write.
 This is a fan experiment, not an official Blue Archive product.
+
+### Start here
+
+Use **`/setup`** once and **`/settings`** later. Personal preferences, privacy,
+relationship profile, linked accounts and assigned servers live there.
+[Discord + optional Web UI](docs/SETTINGS.md) · [Local files without SSH](docs/LOCAL_ACCESS.md)
+· [Install the Minecraft plugin](docs/BRIDGE_INSTALL.md).
 
 ### What she does
 

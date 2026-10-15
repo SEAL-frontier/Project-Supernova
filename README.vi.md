@@ -10,7 +10,7 @@
 
 Thật ra là her problem, your server. Chia quyền nuôi server hơi lỗi. 😭
 
-![Version](https://img.shields.io/badge/version-3.0.0--rc.2-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-3.1.0--rc.1-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
 
@@ -46,7 +46,7 @@ tiến độ và quyền server cùng một chỗ. “Adaptive” là chọn cá
 được với server, model và nhân vật của họ. Bản thử nghiệm ban đầu dùng Tendou Kei.
 Người ta cho ẻm một buổi chiều yên bình; bọn t cho ẻm một Minecraft server. 😭
 
-> **3.0.0-rc.2 đang là release candidate.** Nghiệm thu gồm social tự nhiên và memory bền,
+> **3.1.0-rc.1 đang là release candidate.** Nghiệm thu gồm social tự nhiên và memory bền,
 > plugin/connector hoạt động trên server thật, và người mới cài được theo hướng dẫn.
 > Xem [biên bản triển khai](IMPLEMENTATION.md) và [bảng tính năng](FEATURE_MATRIX.md).
 
@@ -55,6 +55,13 @@ Người ta cho ẻm một buổi chiều yên bình; bọn t cho ẻm một Min
 Tên ẻm là **Kei**. Bọn t cứ gọi thành **keys** để ragebait, xong đem luôn tên sai lên
 GitHub. Thiếu tỉnh táo nhưng rất nhất quán. 🥀 Character/avatar thử nghiệm là **Tendou Kei**;
 persona của bản tự host do m viết. Đây là fan project; quyền nhân vật và ảnh thuộc chủ sở hữu.
+
+### Bắt đầu ở đây
+
+**`/setup`** để bắt đầu, **`/settings`** để chỉnh lại. Tính cách, privacy, memory,
+profile quan hệ, link tài khoản và server được assign nằm ở đó.
+[Discord + Web UI tùy chọn](docs/SETTINGS.md) · [File local không cần SSH](docs/LOCAL_ACCESS.md)
+· [Cài plugin Minecraft](docs/BRIDGE_INSTALL.md).
 
 ### Nó làm được gì?
 

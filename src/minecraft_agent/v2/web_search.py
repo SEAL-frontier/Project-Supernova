@@ -24,13 +24,13 @@ class WebSearch:
         if key in self.cache and now-self.cache[key][0]<300:return {**self.cache[key][1],'cached':True}
         provider=os.environ.get('SEARCH_PROVIDER','auto').lower()
         choices=([p for p,k in (('exa','EXA_API_KEY'),('firecrawl','FIRECRAWL_API_KEY')) if os.environ.get(k)]+(['searxng'] if os.environ.get('SEARXNG_BASE_URL') else [])+(['exa_mcp'] if now>=self.mcp_backoff else [])+['bing_rss']) if provider=='auto' else [provider]
-        errors=[]
+        errors=[];successful_empty=False
         async with httpx.AsyncClient(timeout=18,follow_redirects=True,headers={'User-Agent':'keys-keys web search'}) as client:
             for backend in choices:
                 try:
                     results=await getattr(self,'_'+backend)(client,query,limit)
                     results=[{'title':str(r.get('title',''))[:220],'url':r['url'],'snippet':redact(str(r.get('snippet','')),self.secrets)[:2200]} for r in results if str(r.get('url','')).startswith(('https://','http://'))][:limit]
-                    if not results:raise RuntimeError('No search results')
+                    if not results:successful_empty=True;continue
                     out={'query':query,'backend':backend,'results':results,'observed_at':time.time(),'untrusted_external_data':True}
                     self.cache[key]=(time.time(),out)
                     if len(self.cache)>100:self.cache.pop(next(iter(self.cache)))
@@ -38,6 +38,7 @@ class WebSearch:
                 except (httpx.HTTPError,RuntimeError,ValueError,ET.ParseError,AttributeError,KeyError) as exc:
                     if backend=='exa_mcp':self.mcp_backoff=time.time()+300
                     errors.append(backend+': '+type(exc).__name__)
+        if successful_empty:return {'query':query,'status':'empty','results':[],'backend_errors':errors,'untrusted_external_data':True}
         return {'error':'Search unavailable ('+', '.join(errors)+')','results':[],'untrusted_external_data':True}
     async def _exa(self,c,q,n):
         key=os.environ.get('EXA_API_KEY')

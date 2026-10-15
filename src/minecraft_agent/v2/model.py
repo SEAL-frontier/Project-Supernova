@@ -5,7 +5,7 @@ MODEL='ag/gemini-3.8-flash-medium'
 class Model:
     def __init__(self,base,key,model=None):
         self.model=model or os.environ.get('PROVIDER_MODEL',MODEL)
-        self.http=httpx.AsyncClient(base_url=base.rstrip('/')+'/',headers={'Authorization':'Bearer '+key},timeout=90)
+        self.http=httpx.AsyncClient(base_url=base.rstrip('/')+'/',headers={'Authorization':'Bearer '+key,'x-9router-token-saver':'off'},timeout=90)
     async def chat(self,messages,tools=None,max_tokens=4096,tool_choice=None):
         # Provider adapters may retain only the last system message. Keep persona,
         # identity and later task updates together rather than losing earlier context.

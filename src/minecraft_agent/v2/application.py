@@ -136,13 +136,15 @@ class Kei(discord.Client):
             if remaining>0:await asyncio.sleep(min(remaining,0.25));continue
             self.buffers.pop(key);channel=b['channel'];self.typing_channels[str(channel.id)]=channel
             try:
-                async with channel.typing():
+                async with self.conversation_typing(channel,key[0],b['user']):
                     await self.engine.converse(b['user'],key[0],str(channel.id),'\n'.join(t for _,t in b['messages']),[i for i,_ in b['messages']])
             except Exception as exc:
                 LOG.error('Conversation failed: %s',type(exc).__name__)
                 self.store.queue(channel.id,'Kei đang bị lỗi kết nối/suy luận ('+type(exc).__name__+'); chưa xác nhận làm xong thao tác nào nhé.')
             finally:self.typing_channels.pop(str(channel.id),None)
             # Messages received during processing stay in this same conversation.
+    def conversation_typing(self,channel,scope,user):
+        return channel.typing()
     async def command(self,message,scope,text):
         parts=text.split();user=str(message.author.id);owner=str(self.cfg['owner_id']);channel=message.channel.id
         if parts[0]=='kei!persona':

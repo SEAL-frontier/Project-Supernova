@@ -83,12 +83,14 @@ def render(task,progress,mode,note=False):
 
 class Reporter:
     """One durable card per task, coalesced updates; discord.py handles route 429s."""
-    def __init__(self,store,destination,secrets=(),clock=time.time,interval=5):
+    def __init__(self,store,destination,secrets=(),clock=time.time,interval=5,reference_for_task=None,can_report=None):
         self.db=store;self.destination=destination;self.progress=Progress(store,secrets)
         self.clock=clock;self.interval=interval;self.channel_next={};self.global_next=0
+        self.reference_for_task=reference_for_task;self.can_report=can_report
     async def tick(self):
         tasks=self.db.rows('SELECT t.* FROM kei_tasks t JOIN kei_progress p ON p.task=t.id ORDER BY p.updated DESC LIMIT 100')
         for task in tasks:
+            if self.can_report and not self.can_report(task):continue
             now=self.clock();k=task['id'];user=task['requester'];channel=task['channel'];mode=self.progress.mode(user)
             card=self.db.one('SELECT * FROM kei_debug_cards WHERE task=?',(k,))
             if card and (card['blocked'] or card['next_at']>now):continue
@@ -114,7 +116,11 @@ class Reporter:
                 else:
                     # Mark creation uncertain before network I/O: restart must not duplicate a card.
                     self.db.execute('UPDATE kei_debug_cards SET blocked=1 WHERE task=?',(k,))
-                    sent=await target.send(payload['content'] or None,embed=discord.Embed.from_dict(payload['embed']),allowed_mentions=discord.AllowedMentions.none());message=str(sent.id)
+                    extra={}
+                    if self.reference_for_task:
+                        reference=await self.reference_for_task(task,target)
+                        if reference:extra['reference']=reference
+                    sent=await target.send(payload['content'] or None,embed=discord.Embed.from_dict(payload['embed']),allowed_mentions=discord.AllowedMentions.none(),**extra);message=str(sent.id)
                 completed=self.clock()
                 self.db.execute('UPDATE kei_debug_cards SET message=?,content=?,next_at=?,note=?,blocked=0 WHERE task=?',
                                 (message,content,completed+self.interval,int(note and content is not None),k))

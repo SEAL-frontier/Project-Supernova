@@ -5,6 +5,47 @@ from ..v2.tools import ServerTools, effect_of, emit_progress, console_read
 from ..v2.verification import console_receipt
 from .config import normalize_profile
 from .panel import Panel
+from .local import LocalAccess
+
+
+def diagnostic_receipt(command, output):
+    """Recognize a complete fresh TPS report, without treating arbitrary logs as success."""
+    if command.strip().lstrip("/").casefold() not in ("spark tps", "tps"):
+        return None
+    text = re.sub(r"§[0-9a-fk-or]|\x1b\[[0-9;]*m", "", output, flags=re.I)
+    lines = [
+        re.sub(r"\[[^\]\n]*\]\s*", "", line).strip().lstrip(": ") for line in text.splitlines()
+    ]
+    for index, line in enumerate(lines):
+        if not re.search(r"\bTPS (?:from )?last\b", line, re.I) or ":" not in line:
+            continue
+        values_line = line.rsplit(":", 1)[-1].strip()
+        if not values_line and index + 1 < len(lines):
+            values_line = lines[index + 1]
+        values = [float(v) for v in re.findall(r"\d+(?:\.\d+)?", values_line)]
+        if not 3 <= len(values) <= 6 or not all(0 <= v <= 20.1 for v in values):
+            continue
+        data = {
+            "tps": values,
+            "scope": "Fresh server-reported TPS samples, not continuous monitoring",
+        }
+        for pos, item in enumerate(lines):
+            if item.startswith("Tick durations") and pos + 1 < len(lines):
+                series = []
+                for group in lines[pos + 1].split(";"):
+                    numbers = [float(v) for v in re.findall(r"\d+(?:\.\d+)?", group)]
+                    if len(numbers) == 4:
+                        series.append(
+                            dict(zip(("min_ms", "median_ms", "p95_ms", "max_ms"), numbers))
+                        )
+                if series:
+                    data["tick_durations"] = series
+        return {
+            "kind": "console_diagnostic_readback",
+            "scope": "Fresh complete TPS report",
+            "data": data,
+        }
+    return None
 
 
 class HybridTools(ServerTools):
@@ -37,6 +78,7 @@ class HybridTools(ServerTools):
             if v
         ]
         self.panel = Panel(self.cs["panel"], secrets) if "panel" in self.cs else None
+        self.local = LocalAccess(self.cs["local"]) if self.cs.get("local") else None
 
     def connected_bridge(self, cap=None):
         return bool(
@@ -59,6 +101,8 @@ class HybridTools(ServerTools):
                 caps.update(("console", "power"))
         if self.connected_bridge():
             caps.update(self.bridge.capabilities(self.p["id"]))
+        if self.local:
+            caps.update(self.local.capabilities())
         if "console" in caps:
             caps.update(("players", "tps", "health", "profiler"))
         return sorted(caps)
@@ -189,6 +233,8 @@ class HybridTools(ServerTools):
                 self.p["minecraft_version"] = r["data"]["minecraft_version"]
             return r
         if kind == "status" and not (self.panel or "wings" in self.cs):
+            if self.local:
+                return self.local.inspect(kind, lines)
             if self.cs.get("ssh"):
                 r = self.shell("pgrep -af java | head -n 5; free -b; uptime")
                 return {
@@ -200,6 +246,8 @@ class HybridTools(ServerTools):
                     "verified": False,
                 }
         if kind == "host":
+            if self.local:
+                return self.local.inspect(kind, lines)
             if self.p.get("volume") and self.p.get("uuid"):
                 return super().do_inspect(kind, lines)
             return self.shell(
@@ -216,6 +264,8 @@ class HybridTools(ServerTools):
                 },
             }
         if kind == "logs":
+            if self.local:
+                return self.local.inspect(kind, lines)
             if self.cs.get("ssh", {}).get("volume"):
                 return self.shell(
                     "tail -n "
@@ -225,6 +275,8 @@ class HybridTools(ServerTools):
                 )
             return self.do_files("read", "logs/latest.log")
         if kind == "plugins":
+            if self.local:
+                return self.local.inspect(kind, lines)
             if self.cs.get("ssh", {}).get("volume"):
                 return self.shell(
                     "find "
@@ -241,6 +293,8 @@ class HybridTools(ServerTools):
             return self.bridge.rpc_sync(
                 self.p["id"], "inspect", {"kind": "logs", "lines": 100}
             ).get("stdout", "")
+        if self.local:
+            return self.local.logs()["stdout"]
         if self.cs.get("ssh", {}).get("volume"):
             return self.shell("tail -n 100 " + shlex.quote(self.absolute("logs/latest.log")))[
                 "stdout"
@@ -288,18 +342,21 @@ class HybridTools(ServerTools):
             if after.startswith(before)
             else "\n".join(x for x in after.splitlines() if x not in before.splitlines())
         )
-        receipt = console_receipt(command, output)
+        receipt = console_receipt(command, output) or diagnostic_receipt(command, output)
         return {
             "accepted": True,
             "console_output": output,
             "verified": bool(receipt),
             "verification": receipt,
+            "data": receipt.get("data", {}) if receipt else {},
             "note": "Fresh log evidence only. Acceptance is not completion.",
         }
 
     def do_power(self, action):
         if self.panel or "wings" in self.cs:
             return super().do_power(action)
+        if self.local:
+            return self.local.power(action)
         if self.cs.get("ssh") and self.p.get("uuid"):
             verb = {"start": "start", "stop": "stop", "restart": "restart", "kill": "kill"}[action]
             result = self.shell("docker " + verb + " " + shlex.quote(self.p["uuid"]), timeout=180)
@@ -366,6 +423,8 @@ class HybridTools(ServerTools):
                 "read" if action in ("read", "list") else "change",
                 timeout=60,
             )
+        if self.local:
+            return self.local.files(action, path, content, backup_path)
         if self.cs.get("ssh", {}).get("volume"):
             return super().do_files(action, path, content, backup_path)
         if not self.panel:
@@ -432,6 +491,8 @@ class HybridTools(ServerTools):
 
     def read_binary(self, path, cap=64 * 1024 * 1024):
         path = self._path(path)
+        if self.local and not self.connected_bridge("files"):
+            return self.local.binary(path, cap)
         if self.cs.get("ssh", {}).get("volume"):
             c = self.client()
             password = self.secret_store.get(self.cs["ssh"].get("password"))
@@ -478,7 +539,7 @@ class HybridTools(ServerTools):
         return bytes(raw)
 
     def do_plugin_install(self, url, filename, sha256=None, stage_only=False):
-        if self.cs.get("ssh", {}).get("volume"):
+        if self.cs.get("ssh", {}).get("volume") and not self.local:
             return super().do_plugin_install(url, filename, sha256, stage_only)
         if (
             "/" in filename
@@ -529,6 +590,8 @@ class HybridTools(ServerTools):
                 "change",
                 timeout=90,
             )
+        elif self.local:
+            result = self.local.write_binary(relative, bytes(raw))
         elif self.panel:
             folder = str(pathlib.PurePosixPath(relative).parent)
             self._mkdir_panel(folder)

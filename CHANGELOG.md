@@ -1,8 +1,21 @@
 # Changelog
 
-Current public version: **3.0.0-rc.2**. Architecture: **Supernova**.
+Current public version: **3.1.0-rc.1**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.1.0-rc.1 — Follow the conversation, not the last message
+
+- Guided `/setup` and `/settings`, optional Discord OAuth dashboard, revocable server access.
+- Bounded Discord reply-chain context, validated historical response targets and native formatting.
+- Sourced relationship frequency/ranks, private profiles and crash-safe nightly reflection.
+- Local file/process connectors and a packaged Paper/Leaf bridge.
+- Persistent scheduled agent tasks, timezone-aware confirmations and execution-time permission checks.
+- Optional OpenAI Decision API/Jev social decisions; normal generation remains separate.
+- Search progress uses fetched evidence and compact status updates.
+- Explicit quiet requests and social roleplay cannot cancel legitimate assigned work.
+- 9router chat requests disable provider token-saver context rewriting.
+- Remains a release candidate; see FEATURE_MATRIX.md for verified and partial scope.
 
 ## Unreleased
 

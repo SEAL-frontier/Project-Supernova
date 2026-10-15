@@ -2,6 +2,48 @@ from __future__ import annotations
 import re, unicodedata
 from ..v2.model import tool, S, choices
 
+
+def low_signal(text):
+    text = unicodedata.normalize("NFKC", text).casefold().strip(" .!?,…")
+    return not text or text in {
+        "ok",
+        "okay",
+        "oke",
+        "ừ",
+        "ừm",
+        "uh",
+        "uhm",
+        "đù",
+        "vl",
+        "vcl",
+        "what",
+        "hả",
+        "huh",
+        "lol",
+        "lmao",
+        "bruh",
+        "36",
+        "67",
+    }
+
+
+def followup_allowed(text, to_other=False, answering=False):
+    if to_other or low_signal(text):
+        return False
+    text = unicodedata.normalize("NFKC", text).casefold().strip()
+    if text.strip(" .!") in {"hay", "chuẩn", "đỉnh", "cảm ơn", "thanks", "thank you", "❤️", "👍"}:
+        return True
+    if len(text) > 4 and (
+        "?" in text
+        or re.search(
+            r"\b(tps|ram|mspt|config|check|xem|kiểm tra|profiler|logs?|tiếp|hủy|cancel|đổi|sửa|giải thích|tại sao|như nào)\b",
+            text,
+        )
+    ):
+        return True
+    return answering and len(text.split()) >= 3
+
+
 PROPOSAL = {
     "type": "object",
     "properties": {
@@ -48,7 +90,7 @@ PROPOSAL = {
 
 ROUTER = tool(
     "social_turn",
-    "Choose natural social behavior and optionally dispatch requested server work. This single decision is the reply, not hidden reasoning. Do not invent user words, button clicks, memories or relationships. Persona is expressive, not automatically hostile. Respect boundaries and apologies; never require appeasement before doing work. Ordinary chat/RP never launches the operations worker. Silence is appropriate for other people talking, ambient spam, or an ambiguous nickname. Direct questions/operations deserve a useful response. An emoji can get a reaction or a short playful line, not an accusation of Continue.",
+    "Choose natural social behavior and optionally dispatch requested server work. This single decision is the reply, not hidden reasoning. Do not invent user words, button clicks, memories or relationships. Persona is expressive, not automatically hostile. Respect boundaries and apologies; never require appeasement before doing work. Preserve distinctive mutual teasing, nickname-origin stories and reconciliation as warm episodes with both sides' source IDs; fictional character annoyance is different from a real interpersonal conflict. Ordinary chat/RP never launches the operations worker. Silence is appropriate for other people talking, ambient spam, or an ambiguous nickname. Direct questions/operations deserve a useful response. An emoji can get a reaction or a short playful line, not an accusation of Continue.",
     {
         "intent": choices("chat", "copilot", "task_control"),
         "response_action": choices("reply", "short_reply", "react", "silence"),
@@ -58,6 +100,61 @@ ROUTER = tool(
         },
         "reaction": choices("👍", "❤️"),
         "importance": choices("low", "normal", "important"),
+        "delivery": {
+            "type": "string",
+            "enum": ["channel", "reply", "edit"],
+            "description": "Usually reply to the requester. Channel for a general remark. Edit only an available own progress card. Never attach the requester's work to a bystander's latest message.",
+        },
+        "target_message_id": {
+            "type": "string",
+            "description": "Optional message ID from supplied nearby context or this request. Select a relevant earlier callback/reaction target intentionally; never invent an ID.",
+        },
+        "relationship_rank": {
+            "type": "object",
+            "description": "Optional proposed stable custom relationship label grounded in meaningful sourced history. Never infer romance from teasing or create privilege. Backend requires sustained evidence and confirms changes over time.",
+            "properties": {
+                "label": S,
+                "category": choices(
+                    "neutral",
+                    "warm",
+                    "friend",
+                    "trusted",
+                    "close",
+                    "intimate",
+                    "tense",
+                    "distrustful",
+                    "hostile",
+                    "distant",
+                ),
+                "reason": S,
+                "sources": {"type": "array", "items": S},
+            },
+            "required": ["label", "category", "reason", "sources"],
+        },
+        "schedule_action": {
+            "type": "string",
+            "enum": ["none", "create", "list", "update", "pause", "resume", "cancel"],
+            "description": "Use for an explicit request to do work later/periodically or manage a schedule. Do NOT run that future task now. A pending schedule needs the requester's clock reaction before activation; append the backend notice to your acknowledgment.",
+        },
+        "schedule_id": S,
+        "scheduled_goal": S,
+        "schedule_mode": choices("observe", "change"),
+        "alarm": {"type": "boolean"},
+        "schedule": {
+            "type": "object",
+            "properties": {
+                "kind": choices("once", "daily", "weekly", "cron"),
+                "at": S,
+                "time": S,
+                "weekdays": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 0, "maximum": 6},
+                },
+                "cron": S,
+                "timezone": S,
+            },
+            "required": ["kind", "timezone"],
+        },
         "memory_action": choices("none", "remember", "forget"),
         "memory_scope": choices("current", "all"),
         "memory_ids": {"type": "array", "items": S},
