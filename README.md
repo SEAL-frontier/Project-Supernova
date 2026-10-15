@@ -15,30 +15,51 @@ Actually, her problem. Your server. We got the custody arrangement wrong. 😭
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
 
-[English](#english) · [Tiếng Việt](#tiếng-việt) · [Setup](docs/QUICKSTART.md) · [Changelog](CHANGELOG.md)
+[English](README.md) · [Tiếng Việt](README.vi.md) · [Setup](docs/QUICKSTART.md) · [Changelog](CHANGELOG.md)
 
 </div>
 
----
+## What is this project?
+
+**keys-keys is a self-hosted AI bot that lives in Discord and Minecraft.** People can
+chat with her in DMs, server channels or in-game. Assigned admins can also ask her to
+operate their Minecraft server: check TPS/RAM, investigate lag, read or change configs,
+manage plugins and run server commands. She uses real tools and checks the result.
+
+The Python bot runs the conversation, memory and agent. It connects through your Panel,
+SSH or the optional Minecraft plugin, using what you have available. One bot can serve
+multiple people and assigned servers. You bring a Discord token, a model endpoint and
+your own persona; start chat-only and add Minecraft when ready.
+
+## Why does this project exist?
+
+Because running a Minecraft server turns “let me play for a bit” into opening a panel,
+SSH, three logs, a config file and a plugin release page. Someone says “server lag”
+and suddenly you have a second job. Unpaid, naturally. 🥀
+
+We wanted one character who could hang out with the group **and do that server work
+when asked**, in the same conversation. Casual chat should feel like chat. A server
+request should lead to an investigation, actions and a result backed by evidence.
+
+That is why **Supernova** separates ordinary conversation from the copilot agent,
+and keeps memory, task progress and server access together. “Adaptive” means choosing
+the right kind of work; “hybrid” means using the connections available on that server.
+The open-source goal is to let other people run that setup with their own servers,
+models and characters. The original experiment happened to hand the job to Tendou Kei.
+She received a Minecraft server instead of a peaceful afternoon. 😭
 
 > **3.0 is a release candidate.** Stable requires three things: natural social behavior
 > with durable memory, plugin/connectors verified on a real server, and a clean-clone
 > setup that does not require finding the developer. Evidence lives in
 > [the implementation log](IMPLEMENTATION.md) and [feature matrix](FEATURE_MATRIX.md).
 
-## English
-
-### Why keys-keys?
+### Why the name keys-keys?
 
 Her name is **Kei**. Someone kept calling her **keys** to annoy her. Now the typo owns
 a repository. Terrible naming process. Excellent commitment to the bit. 🥀
 
 The experimental character/avatar is **Tendou Kei**. Your persona is yours to write.
 This is a fan experiment, not an official Blue Archive product.
-
-She has two jobs: hang out, and operate an assigned Minecraft server when asked.
-“Yo” does not need an incident-response department. “Check TPS” should produce actual
-TPS instead of a paragraph about how happy she would be to help someday.
 
 ### What she does
 
@@ -131,58 +152,6 @@ Examples: “Show the current anti-xray config”; “Find why TPS dropped, do n
 [Connections](docs/CONNECTORS.md) · [Minecraft](docs/MINECRAFT.md) ·
 [Social/memory/privacy](docs/SOCIAL.md) · [Updates/recovery](docs/UPGRADING.md) ·
 [Troubleshooting](docs/TROUBLESHOOTING.md)
-
-## Tiếng Việt
-
-Kei vừa chat vừa làm Minecraft copilot. Chat thường đi đường nhẹ; nhờ việc thì mới
-chạy agent có plan, tool, hậu kiểm và tiến độ. Không phải cứ nhắc Minecraft là em nó
-phi vào SSH như đi đánh trận.
-
-3.0 thêm relationship theo người/ngữ cảnh, kỷ niệm có đoạn hội thoại gốc, react/im lặng,
-nhắn chủ động có opt-in và chatbot ingame. Giữ agent, vision, search và debug từ 2.x.
-Điểm thân thiết là ngữ cảnh cho nhân vật, không phải cảm xúc thật hay thẻ admin.
-
-### Cài đỡ khổ
-
-Chạy các lệnh ở phần English, chọn tiếng Việt trong wizard. Nó tự tạo file riêng trong
-`data/`; không cần sửa YAML trước. Chưa có server thì chọn `chat`. Có Panel thì đưa URL
-và Client API key rồi chọn server. Có SSH thì dò thư mục. Có plugin thì nhận pairing
-config được tạo sẵn. Có gì dùng nấy, không bắt đủ nguyên bộ.
-
-Tạo bot trên [Discord Developer Portal](https://discord.com/developers/applications),
-bật Message Content Intent và invite đủ quyền. Hướng dẫn từng bước ở
-[QUICKSTART](docs/QUICKSTART.md). Windows dùng Docker/WSL; Linux hoặc Pelican Python slot
-có hướng dẫn native trong cùng tài liệu.
-
-Mặc định timezone Việt Nam là **Asia/Ho_Chi_Minh**, wizard cho đổi. Đừng dùng localhost
-của container để gọi provider trên host rồi đổ tại em nó 🦭
-
-### Nói chuyện và giao việc
-
-- Public tự xen tắt mặc định. Bật thì chọn `free` hoặc `whitelist`.
-- Mặc định gọi `kei`; deployment riêng có thể thêm Keys Keys, Cây hoặc nickname đã học.
-- Có thể đáp một câu, một câu ngắn, react hoặc im. Không phải tin nào cũng cần tranh micro.
-- DM chủ động phải opt-in; tối đa 3 lần/ngày và không đuổi theo khi m không trả lời.
-- Chat thô 90 ngày; episode quan trọng giữ đoạn gốc cần thiết. Quên thì xóa cả phần dẫn xuất.
-- Người thường chat được. Copilot cần assign đúng server; link Discord/UUID không tự cấp quyền mới.
-- Plugin chạy network nền; phần cần Bukkit API về scheduler. Model không ngồi trên tick thread.
-
-`/debug minimal` hiện objective/checklist trong embed hồng nhạt; `advanced` thêm codeblock
-lệnh/log thật. Persona cũ vẫn có ở `soft`; không cần dỗ mới chịu làm việc nữa.
-
-“Check TPS với RAM Java server này”; “Đọc anti-xray hiện tại”; “Tìm nguyên nhân lag,
-chưa sửa gì”; “Stage plugin tương thích rồi báo lại.” Đã làm thì phải có bằng chứng,
-không có chuyện 200 OK xong tự phong chiến thắng.
-
-### Version và giới hạn
-
-**3.0.0-rc.2 chưa phải stable.** Ba cửa nghiệm thu ở đầu README phải có bằng chứng.
-Xem [feature matrix](FEATURE_MATRIX.md), [implementation log](IMPLEMENTATION.md) và
-[changelog](CHANGELOG.md); không lấy một bài test mock làm bằng chứng server thật.
-
-Mỗi connector có giới hạn. Plugin-only không bật lại server đã tắt; login Panel có thể
-cần browser tùy chọn hoặc session đã xác thực. Không hot reload plugin. Một bot token,
-một consumer, không phải hai chị em cùng trả lời một tin rồi hỏi sao nó lắm mồm.
 
 ## License and avatar
 

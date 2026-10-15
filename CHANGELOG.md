@@ -4,6 +4,13 @@ Current public version: **3.0.0-rc.2**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
 
+## Unreleased
+
+### Documentation
+
+- Put the project definition and reason for existing first, in both languages.
+- Add a full Vietnamese README; language links open the selected file directly instead of relying on fragment scrolling in mobile clients.
+
 ## 3.0.0-rc.2 — Forget means forget, even mid-consolidation
 
 - A user forgetting a source invalidates in-flight consolidation before it can write an old summary or group profile back into memory.
