@@ -7,10 +7,10 @@ Current public version: **3.1.0-rc.2**. Architecture: **Supernova**.
 ## 3.1.0-rc.2 — Web you can actually read
 
 - Responsive silver, pink and crimson dashboard with plain-language setup, local avatar and accessible interaction.
-- Reusable public branding; production names, community links and credentials stay in private configuration.
+- Reusable public branding; production names, community links and credentials stay in private configuration. Known profile labels are localized; custom memories remain intact.
 - Private early acknowledgments and graceful command failures; refresh slash commands after Gateway connects.
 - Host shell requires operator-issued host access, separately from server-scoped delegation.
-- Clean-clone Docker/setup/Discord/model/Panel read integration verified; production OAuth tracked separately.
+- Clean-clone Docker/setup/Discord/model/Panel read integration and real production Discord OAuth verified.
 - Keeps the protocol-1 bridge artifact from 3.1.0-rc.1; backend update needs no Minecraft restart.
 - Still a release candidate; see FEATURE_MATRIX.md for verified and partial scope.
 

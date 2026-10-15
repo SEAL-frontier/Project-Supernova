@@ -211,11 +211,14 @@ function renderServers(){
 }
 function updateTaskMode(){$('task-server').disabled=$('task-mode').value==='alarm';}
 $('task-mode').onchange=updateTaskMode;
+const episodeTitles={warm_exchange:'Một chuyện đáng nhớ',nickname:'Chuyện biệt danh',milestone:'Một dấu mốc',conflict:'Lúc không vui',reconciliation:'Chuyện làm hòa',commitment:'Điều đã hứa',inside_joke:'Chuyện đùa của hai người'};
+function friendlyMemoryTitle(title){return episodeTitles[title]||title||'Chuyện đáng nhớ';}
+function friendlyRankReason(reason){return !reason||reason==='No established rank change yet.'?'Chưa có thay đổi quan hệ đủ rõ để đổi rank.':reason;}
 async function loadProfile(){
- const profile=await api('/api/profile');$('relationship-rank').textContent=profile.rank?.label||'Neutral';$('relationship').textContent=profile.rank?.reason||'Chưa có thay đổi đáng kể.';$('dimensions').replaceChildren();
+ const profile=await api('/api/profile');$('relationship-rank').textContent=profile.rank?.label||'Neutral';$('relationship').textContent=friendlyRankReason(profile.rank?.reason);$('dimensions').replaceChildren();
  const labels={familiarity:'Quen thuộc',trust:'Tin cậy',warmth:'Ấm áp',playfulness:'Trêu đùa',tension:'Căng thẳng',confidence:'Độ chắc chắn',interaction_frequency:'Tần suất tương tác'};
  for(const[key,value]of Object.entries(profile.dimensions||{})){if(typeof value!=='number')continue;const stat=block($('dimensions'),'','stat');const label=block(stat,'','stat-label');block(label,labels[key]||key,'');block(label,Math.round(value*100)+'%','');const meter=document.createElement('meter');meter.min=0;meter.max=1;meter.value=Math.max(0,Math.min(1,value));meter.setAttribute('aria-label',labels[key]||key);stat.append(meter);}
- $('memories').replaceChildren();for(const memory of(profile.memories||[]).slice(0,5)){const row=block($('memories'),'');if(memory.title)block(row,memory.title,'item-title');if(memory.summary)block(row,memory.summary,'');}
+ $('memories').replaceChildren();for(const memory of(profile.memories||[]).slice(0,5)){const row=block($('memories'),'');block(row,friendlyMemoryTitle(memory.title),'item-title');if(memory.summary)block(row,memory.summary,'');}
  if(!profile.memories?.length)empty($('memories'),'Chưa có episode đã chọn lưu ở đây. Những chuyện đáng nhớ sẽ xuất hiện theo thời gian.');
 }
 async function load(){

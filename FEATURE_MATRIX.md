@@ -20,7 +20,7 @@ Implemented = a code path with evidence. Partial = an important acceptance gap r
 | Proactive conversation | Partial | Opt-in DMs, quiet hours, caps and unanswered suppression | Reasons mainly commitments/episodes; general public initiative deferred |
 | /setup and /settings | Implemented | Guided private UI, early private acknowledgments, safe error replies; CLI and real HTTP integration | Independent novice installation and another human slash-command check still needed |
 | Delegated administrators | Implemented | Owner-issued revocable server scopes, grantor/history; host-shell gate also covers verification | General SSH requires operator or static host_admins; server/rank/UI profiles cannot grant it |
-| Responsive OAuth dashboard | Partial | Responsive branded UI; server-side identity/CSRF/access; real HTTP integration and Discord-accepted OAuth secret | Full production browser login/callback acceptance tracked separately |
+| Responsive OAuth dashboard | Implemented | Real Discord OAuth login on production, configured operator identity, assigned server and self profile; desktop/mobile UI | Independent novice installation remains a separate gate |
 | Scheduled agent tasks | Implemented | Chat, /tasks and UI; once/daily/weekly/cron, timezone, clock confirmation | Permission rechecked at execution; sensitive steps still require approval |
 | Durable scheduling | Implemented | Unique occurrences, recovery, bounded read retries, no blind mutation replay | Actual confirmed scheduled agent read ran in isolated staging; alarm receipt proves sending only |
 | Panel User API + SSH | Implemented | Real status/console/file reads and task history | Password/challenge fallback varies by deployment |
@@ -38,4 +38,4 @@ Actual recent Discord DM/public/reply/webhook messages, five feedback entries, t
 
 The plugin was verified by matching the built/installed SHA256 and live connection logs, then the new distributable was tested independently on real Leaf. A scheduled agent read the actual server, reached the existing completion path and reopened without duplicate task/occurrence. Search counters and structured TPS fallback were checked against real responses. Slow tick maxima remain visible.
 
-OAuth integration uses real HTTP with a fixture issuer; it is not a production Discord-login claim. Private acceptance measurements stays outside the public distribution; ordinary copilot action audit remains included.
+OAuth contract tests use a fixture issuer. Production acceptance additionally completed real Discord consent, callback and authenticated dashboard reads for the configured operator; the assigned server and private profile loaded without changing settings. This is not an independent novice trial. Private acceptance measurements stays outside the public distribution; ordinary copilot action audit remains included.
