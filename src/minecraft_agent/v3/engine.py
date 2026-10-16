@@ -534,7 +534,11 @@ class Engine(LegacyEngine):
             if not reason:
                 continue
             if self.db.one('SELECT id FROM kei_social_deliveries WHERE person=? AND reason=?', (person, reason['id'])):
-                continue
+                if not gentle_followup:
+                    continue
+                reason = {**reason, 'id': 'followup:' + unanswered[0]['id']}
+                if self.db.one('SELECT id FROM kei_social_deliveries WHERE person=? AND reason=?', (person, reason['id'])):
+                    continue
             attempt = 'initiative:' + person
             last = self.db.one('SELECT last_run FROM kei_jobs WHERE key=?', (attempt,))
             if last and now - last['last_run'] < 3600:

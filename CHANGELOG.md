@@ -1,8 +1,14 @@
 # Changelog
 
-Current public version: **3.1.0-rc.3**. Architecture: **Supernova**.
+Current public version: **3.1.0-rc.4**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.1.0-rc.4 — One more message, when you asked for it
+
+- Fix the gentle-followup gate: a close user who explicitly opted into more contact may receive one model-selected followup about a retained sourced topic, even if that topic initiated the first DM.
+- Keep deduplication, quiet hours, relationship/cadence checks and the two-unanswered-message stop. Forgotten topics are not recreated.
+- Includes the full rc.3 social, setup, dashboard, permissions and Panel/startup verification changes. Still a prerelease; long-term social and independent novice acceptance remain open.
 
 ## 3.1.0-rc.3 — A place for the conversation
 

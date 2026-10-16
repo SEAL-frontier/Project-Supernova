@@ -1,4 +1,4 @@
-# Supernova 3.1.0-rc.3 — feature matrix
+# Supernova 3.1.0-rc.4 — feature matrix
 
 Implemented = a code path with evidence. Partial = an important acceptance gap remains. This is a prerelease; transport mocks are not production proof.
 
@@ -58,3 +58,5 @@ OAuth contract tests use a fixture issuer. Production acceptance additionally co
 | Panel power signal translation | Implemented | Confirmed wrong payload in source and real failed action history; transport regression validates exact schema; real offline-to-running Panel start and bridge reconnection observed; fresh startup marker handles noisy logs |
 
 Actual Panel validation probe returned HTTP 422 with `The signal field is required.` without issuing a valid power command. Current server state read back as running. Social credit regressions cover operational-noise starvation and distinct same-session apology/conflict updates.
+
+rc.4 adds a regression for a single opted-in gentle followup about an existing retained topic, then stops after two unanswered messages. No live unsolicited DM was sent merely to test it.
