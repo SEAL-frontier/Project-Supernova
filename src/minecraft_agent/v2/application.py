@@ -51,8 +51,8 @@ class Kei(discord.Client):
         except discord.HTTPException as exc:LOG.warning('Slash registration failed: %s; kei!debug remains available',type(exc).__name__)
         self.bg=[asyncio.create_task(self.outbox_loop()),asyncio.create_task(self.monitor_loop()),asyncio.create_task(self.maintenance()),asyncio.create_task(self.task_typing_loop()),asyncio.create_task(self.progress_loop())]
         for task in self.store.rows("SELECT id FROM kei_tasks WHERE status='queued'"):self.engine.launch(task['id'])
-        for task in self.store.rows("SELECT * FROM kei_tasks WHERE status='reconcile'"):
-            self.store.queue(task['channel'],'Kei bị ngắt giữa thao tác; cần đối soát trạng thái server trước khi làm tiếp. Chưa xác nhận hoàn tất.')
+        if hasattr(self.engine,'reports'):
+            self.engine.reports.recover()
     async def on_ready(self):
         if not self.ready:
             await self.refresh_identities()

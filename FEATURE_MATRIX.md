@@ -1,4 +1,4 @@
-# Supernova 3.1.0-rc.4 — feature matrix
+# Supernova 3.2.0-rc.2 — feature matrix
 
 Implemented = a code path with evidence. Partial = an important acceptance gap remains. This is a prerelease; transport mocks are not production proof.
 
@@ -60,3 +60,36 @@ OAuth contract tests use a fixture issuer. Production acceptance additionally co
 Actual Panel validation probe returned HTTP 422 with `The signal field is required.` without issuing a valid power command. Current server state read back as running. Social credit regressions cover operational-noise starvation and distinct same-session apology/conflict updates.
 
 rc.4 adds a regression for a single opted-in gentle followup about an existing retained topic, then stops after two unanswered messages. No live unsolicited DM was sent merely to test it.
+
+
+## 3.2.0-rc.1 feedback delta
+
+| Capability | Status | Evidence / boundary |
+|---|---|---|
+| Restart notification dedupe + grouped recovery | Implemented | Durable report keys, legacy-notice migration, restart replay regression |
+| Human approval summaries + progress labels | Implemented | Raw action stays in pending/audit; public summary + exact-step button |
+| Owner report archive + per-category DM preferences | Implemented | Shared Reports service; permission checks; Web and single-pass chat controls |
+| Scoped co-owner and self policy editing | Implemented | Shared Access service; atomic grants; original owner protected; no implicit host escalation |
+| Editable Custom per-tool rules | Implemented | Persisted per subject/server; checked at approval and dispatch |
+| Minecraft connection inventory | Implemented | Configured transport names only; no credential exposure |
+| Active-only schedule UI, pending edit/cancel | Implemented | Existing scheduler/history preserved; empty edited time retains old schedule |
+| Line-separated conversation delivery | Implemented | Fenced code/list regression; Aris reference inspected read-only |
+| Sourced event-time social delta notices | Implemented; field acceptance partial | Bounded emotional credits + cumulative net delta; stable ranks still require evidence and time |
+| Stable production acceptance | Partial | Real deployment/connector checks recorded in release report; longitudinal social/novice acceptance remain open |
+
+| Host User versus Full Machine · Root | Implemented; platform evidence scoped | Per-task identity context, sudo/direct-root UID check; Linux production sudo probe. Optional su fallback is not claimed live-accepted; Windows Administrator elevation unchanged. |
+
+
+## 3.2.0-rc.2 corrective feedback delta
+
+| Requirement | Status | Evidence / limit |
+|---|---|---|
+| Codex-inspired run-mode cards | Implemented | Distinct Default, Auto-review, Read only, Full access, editable TOML Custom; backend contract tested |
+| Read-only superior approval | Implemented | Owner/host authority checked at confirmation; requester identity unchanged; ordinary admin notifications are not approval cards |
+| Custom tool/path/command policies | Implemented | Strict TOML validation, actual dispatch enforcement, no scope expansion |
+| Long-running jobs without overall budget pauses | Implemented | Regression exceeds former simple-turn limit; durable cycle state, real freeze reasons; I/O hangs still bounded |
+| Resume same task / preserve receipts | Implemented | Explicit continuation reuses existing task; duplicate-mutation and compaction regressions |
+| Missing datapack-source investigation | Implemented; user file may remain unavailable | Bounded filename search returns actual matches or a concrete missing-source question; no fabricated install |
+| Follow-up replies/reactions | Implemented; field feedback ongoing | Same-person recent reply window; cheap acknowledgments; bystander and quiet boundaries retained |
+| English Web UI | Implemented | Real local browser flow plus production delivery checked in operator acceptance report |
+| Production/Minecraft acceptance | Scoped | Real SSH identities, live Panel/bridge/model checks; no destructive admin action run solely as a test |

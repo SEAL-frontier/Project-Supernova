@@ -51,6 +51,7 @@ class Access:
             user == str(self.engine.cfg["owner_id"])
             or user in list(map(str, self.engine.servers[server].get("owners", [])))
             or bool(row and row["owner"] == user)
+            or bool(self.db.one("SELECT user FROM kei_server_owners WHERE server=? AND user=? AND revoked IS NULL",(server,user)))
         )
 
     def manager(self, user, server):
@@ -66,6 +67,12 @@ class Access:
             "INSERT INTO kei_access_history VALUES (?,?,?,?,?,?,?)",
             (uid(), server, str(subject), str(issuer), action, level, time.time()),
         )
+
+        if action in ('grant','member_saved') and hasattr(self.engine,'reports') and not self.owner(issuer,server):
+            actor=self.db.one('SELECT global_name,account_display,username FROM kei_users WHERE user_id=?',(str(issuer),)) or {}
+            display=actor.get('global_name') or actor.get('account_display') or actor.get('username') or str(issuer)
+            labels={'observe':'chỉ xem','copilot':'thao tác Minecraft','chat':'chỉ trò chuyện','observer':'người xem','moderator':'moderator','admin':'admin','owner':'đồng sở hữu'}
+            self.engine.reports.record(server,'admin',issuer,display+' đã đổi quyền tài khoản '+str(subject)+' thành '+labels.get(level,level)+'.',dedupe='access:'+server+':'+str(issuer)+':'+str(subject)+':'+action+':'+level+':'+str(int(time.time()//15)))
 
     def grant(self, issuer, subject, server, level):
         issuer, subject = str(issuer), str(subject)
@@ -127,11 +134,54 @@ class Access:
         save(self.db,self.engine.cfg,issuer,subject,server,'minecraft','read_only',False)
         self.record(server, subject, issuer, "revoke", "chat")
 
-    def set_policy(self,issuer,subject,server,extent,level):
+    def coowner(self,issuer,subject,server,enabled=True):
+        if not self.owner(issuer,server):raise PermissionError('Chỉ chủ server được thêm hoặc gỡ đồng sở hữu.')
+        fixed={str(self.engine.cfg['owner_id']),*map(str,self.engine.servers[server].get('owners',[]))}
+        registered=self.db.one('SELECT owner FROM kei_registered_servers WHERE id=?',(server,))
+        if registered:fixed.add(registered['owner'])
+        if str(subject) in fixed:raise ValueError('Chủ gốc được giữ trong cấu hình triển khai; bạn vẫn có thể sửa mức thực thi của mình.')
+        with self.db.atomic():
+            if enabled:
+                self.db.execute('INSERT OR REPLACE INTO kei_server_owners VALUES (?,?,?,?,NULL)',(server,str(subject),str(issuer),time.time()))
+                self.grant(issuer,subject,server,'copilot')
+            else:
+                self.db.execute('UPDATE kei_server_owners SET revoked=? WHERE server=? AND user=?',(time.time(),server,str(subject)))
+                self.db.execute('UPDATE kei_server_admins SET revoked=? WHERE server=? AND user=?',(time.time(),server,str(subject)))
+                self.db.execute('INSERT OR REPLACE INTO kei_grants VALUES (?,?,?,?)',(str(subject),server,'chat',str(issuer)))
+                from .permissions import save
+                save(self.db,self.engine.cfg,issuer,subject,server,'minecraft','read_only',False)
+            self.record(server,subject,issuer,'owner_grant' if enabled else 'owner_revoke')
+
+    def configure_member(self,issuer,subject,server,role,level='copilot',execution=None):
+        issuer,subject=str(issuer),str(subject)
+        if not self.manager(issuer,server):raise PermissionError('Bạn chưa quản lý server này.')
+        if role not in ('observer','moderator','admin','owner'):raise ValueError('Chọn vai trò hợp lệ.')
+        if level not in ('observe','copilot'):raise ValueError('Chọn quyền xem hoặc thao tác server.')
+        is_owner=self.owner(subject,server)
+        current_admin=bool(self.db.one('SELECT user FROM kei_server_admins WHERE server=? AND user=? AND revoked IS NULL',(server,subject)))
+        if (role in ('admin','owner') or current_admin or is_owner) and not self.owner(issuer,server):raise PermissionError('Chỉ chủ server được sửa owner hoặc admin.')
+        if is_owner and role!='owner' and not self.db.one('SELECT user FROM kei_server_owners WHERE server=? AND user=? AND revoked IS NULL',(server,subject)):
+            raise ValueError('Chủ gốc được giữ trong cấu hình triển khai; bạn vẫn có thể sửa mức thực thi của mình.')
+        with self.db.atomic():
+            # Validate/save execution before a co-owner voluntarily gives up authority.
+            if execution:
+                if not isinstance(execution,dict):raise ValueError('Mức thực thi chưa hợp lệ.')
+                self.set_policy(issuer,subject,server,execution.get('extent'),execution.get('level'),execution.get('config',execution.get('rules')))
+            if role=='owner':
+                if not is_owner:self.coowner(issuer,subject,server,True)
+            else:
+                if is_owner:self.db.execute('UPDATE kei_server_owners SET revoked=? WHERE server=? AND user=?',(time.time(),server,subject))
+                if role=='admin':self.db.execute('INSERT OR REPLACE INTO kei_server_admins VALUES (?,?,?,?,NULL)',(server,subject,issuer,time.time()))
+                else:self.db.execute('UPDATE kei_server_admins SET revoked=? WHERE server=? AND user=?',(time.time(),server,subject))
+                assigned='observe' if role=='observer' else level if role=='admin' else 'copilot'
+                self.db.execute('INSERT OR REPLACE INTO kei_grants VALUES (?,?,?,?)',(subject,server,assigned,issuer))
+            self.record(server,subject,issuer,'member_saved',role)
+
+    def set_policy(self,issuer,subject,server,extent,level,rules=None):
         if not self.owner(issuer,server):raise PermissionError('Chỉ chủ server được đổi phạm vi và mức thực thi.')
         from .permissions import save
         tool=self.engine.tools.get(server);has_ssh=bool(getattr(tool,'cs',{}).get('ssh'))
-        save(self.db,self.engine.cfg,issuer,subject,server,extent,level,has_ssh)
+        save(self.db,self.engine.cfg,issuer,subject,server,extent,level,has_ssh,rules)
         self.record(server,str(subject),str(issuer),'execution_policy',extent+':'+level)
 
     def visible(self, user, scope=None):
@@ -168,8 +218,10 @@ class Access:
         registered=self.db.one('SELECT owner FROM kei_registered_servers WHERE id=?',(server,))
         owners=set(map(str,profile.get('owners',[])))|{str(self.engine.cfg['owner_id'])}
         if registered:owners.add(registered['owner'])
+        coowners={r['user']:r for r in self.db.rows('SELECT * FROM kei_server_owners WHERE server=? AND revoked IS NULL',(server,))}
+        owners.update(coowners)
         for subject in owners:
-            people[subject]={**people.get(subject,{}),'subject':subject,'level':self.engine.permission(subject,server),'issuer':'','owner':True,'admin':True}
+            people[subject]={**people.get(subject,{}),'subject':subject,'level':self.engine.permission(subject,server),'issuer':'','owner':True,'admin':True,'coowner':subject in coowners,'issuer':coowners.get(subject,{}).get('issuer','')}
         for subject, assigned in self.engine.cfg.get('assignments',{}).items():
             if server in assigned and str(subject) not in people:
                 people[str(subject)]={'subject':str(subject),'level':self.engine.permission(str(subject),server),'issuer':'','configured':True,'admin':str(subject) in admins}
@@ -178,6 +230,10 @@ class Access:
         for entry in people.values():
             from .permissions import policy
             entry['execution']=policy(self.db,self.engine.cfg,entry['subject'],server)
+            from .permissions import rules_for
+            entry['execution']['rules']=rules_for(self.db,self.engine.cfg,entry['subject'],server)
+            from .permissions import custom_for,custom_text
+            entry['execution']['config']=custom_text(custom_for(self.db,self.engine.cfg,entry['subject'],server))
             entry['role']='owner' if entry.get('owner') else 'admin' if entry.get('admin') else entry['level']
             entry['permissions']=['Xem trạng thái, TPS/RAM và đọc log'] if entry['level'] in ('observe','copilot') else ['Trò chuyện với Kei']
             if entry['level']=='copilot':entry['permissions'].append('Nhờ thay cấu hình và chạy lệnh trên server; việc nhạy cảm vẫn cần xác nhận')
@@ -243,10 +299,13 @@ class UserExperience:
                     "name": p.get("name", sid),
                     "level": self.engine.permission(user, sid),
                     "owner": self.access.owner(user, sid),
+                    "ssh_user": str(getattr(self.engine.tools.get(sid),'cs',{}).get('ssh',{}).get('user','')) if self.access.manager(user,sid) else "",
                     "host_available": bool(getattr(self.engine.tools.get(sid),'cs',{}).get('ssh')),
                     "can_grant_host": __import__('minecraft_agent.v3.permissions',fromlist=['static_host']).static_host(self.cfg,user,sid),
                     "manage_access": self.access.manager(user, sid),
                     "capabilities": self.engine.tools[sid].capabilities(),
+                    "connections": [k for k,v in getattr(self.engine.tools[sid],'cs',{}).items() if v],
+                    "report_preferences": self.engine.reports.settings(user,sid) if self.access.owner(user,sid) else None,
                 }
             )
         return {

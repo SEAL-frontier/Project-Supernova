@@ -119,7 +119,36 @@ class Kei(LegacyKei):
         self.channel_speakers = {}
         self.search_cards = {}
 
+    async def monitor_loop(self):
+        await self.wait_until_ready()
+        consecutive = {}
+        while not self.is_closed():
+            for server, executor in list(self.engine.tools.items()):
+                try:
+                    result = await asyncio.to_thread(executor.do_inspect, 'status')
+                    data = result['data']
+                    resources = data.get('resources', {})
+                    limit = resources.get('memory_limit_bytes', data.get('limits', {}).get('memory_limit', 0) * 1024 * 1024)
+                    event = self.engine.reports.monitor_sample(server, data.get('state', 'unknown'), resources, limit)
+                    consecutive[server] = 0
+                    if not event:
+                        continue
+                    notify = str(executor.p.get('notify_user', self.cfg['owner_id']))
+                    k = self.store.create_task(server, 'dm:' + notify, notify, notify, 'Kiểm tra trạng thái ' + executor.p['name'] + ' và xác định có lỗi bất thường không. Chỉ đọc; không sửa hay bật/tắt server. Kết luận bằng monitor_verdict normal/issue/unknown cùng bằng chứng.', 'observe', ['Đọc trạng thái và log mới', 'Phân biệt khởi động, dừng chủ động và lỗi thật', 'Lưu kết luận cùng bằng chứng'])
+                    self.store.execute('INSERT INTO kei_report_tasks VALUES (?,?,?)', (k, 'monitor', event['key']))
+                    self.engine.launch(k)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    consecutive[server] = consecutive.get(server, 0) + 1
+                    if consecutive[server] == 2:
+                        self.engine.reports.record(server, 'crash', 'monitor', 'Chưa đọc được trạng thái server (' + type(exc).__name__ + '). Chưa đủ dữ kiện để kết luận crash.', dedupe='monitor-read:' + server + ':' + str(int(time.time() // 3600)))
+                    LOG.warning('Monitor sample deferred server=%s type=%s', server, type(exc).__name__)
+            await asyncio.sleep(30)
+
     def can_report(self, task):
+        if self.store.one('SELECT task FROM kei_report_tasks WHERE task=?', (task['id'],)):
+            return False
         origin = self.store.one('SELECT ack FROM kei_task_origins WHERE task=?', (task['id'],))
         if not origin or not origin['ack']:
             return True
@@ -291,6 +320,12 @@ class Kei(LegacyKei):
         await super().on_interaction(interaction)
 
     async def setup_hook(self):
+        from .permissions import policy
+        for task in self.store.rows("SELECT * FROM kei_tasks WHERE status='waiting' AND pending IS NOT NULL"):
+            if policy(self.store, self.cfg, task['requester'], task['server'])['level'] != 'read_only':
+                pending = json.loads(task['pending'])
+                pending['confirmed'] = True
+                self.store.update_task(task['id'], status='queued', pending=dumps(pending))
         await super().setup_hook()
         await self.bridge.start()
         await self.ux.start()
@@ -345,13 +380,21 @@ class Kei(LegacyKei):
             self.direct_windows[channel, user] = now + self.cfg['social'].get('followup_seconds', 45)
             self.followup_turns[channel, user] = 0
         last = self.store.one("SELECT content FROM kei_messages WHERE scope=? AND user=? AND role='assistant' AND forgotten=0 ORDER BY at DESC LIMIT 1", (scope, user))
+        recent_exchange = self.followup_turns.get((channel, user), 0) < 2 and self.direct_windows.get((channel, user), 0) > now and (not to_other)
+        if not direct and recent_exchange and low_signal(message.content) and (not self.engine.quiet.active(scope, person)):
+            if self.store.seen(message.id):
+                return
+            self.store.add_message(scope, user, 'user', message.content, str(message.id))
+            self.engine.conversation.queue(channel, str(message.id), 'react', '👍' if message.content.casefold().strip(' .!') in ('ok', 'okay', 'oke', 'ừ', 'yes') else '👀', scope, user, 'reply')
+            self.followup_turns[channel, user] = self.followup_turns.get((channel, user), 0) + 1
+            return
         following = self.followup_turns.get((channel, user), 0) < 2 and self.direct_windows.get((channel, user), 0) > now and followup_allowed(message.content, to_other=to_other, answering=bool(last and '?' in last['content']))
         if not direct and (not to_other) and (message.content.lower().strip(' .!') in ('ừ', 'ừ làm đi', 'ok', 'okay', 'yes', 'làm đi', 'xác nhận', 'đồng ý')):
             following = following or len(self.store.rows("SELECT id FROM kei_tasks WHERE requester=? AND scope=? AND status='waiting'", (user, scope))) == 1
         if not (direct or following):
             return
         weak_reason = 'nickname' if learned and (not strong) else 'followup' if following and (not strong) else 'direct'
-        if not strong and (not operation(message.content)) and (not participation_candidate(message.id, weak_reason, self.engine.memory.relationship(person, scope))):
+        if not strong and weak_reason == 'nickname' and (not operation(message.content)) and (not participation_candidate(message.id, weak_reason, self.engine.memory.relationship(person, scope))):
             return
         if following and (not direct):
             self.followup_turns[channel, user] = self.followup_turns.get((channel, user), 0) + 1
@@ -480,7 +523,12 @@ class Kei(LegacyKei):
                         view = discord.ui.View(timeout=None)
                         view.add_item(discord.ui.Button(label='Xác nhận bước này', style=discord.ButtonStyle.danger, custom_id='kei-confirm:' + row['confirm_task']))
                     task = self.store.one('SELECT o.* FROM kei_task_outbox m JOIN kei_task_origins o ON o.task=m.task WHERE m.outbox=?', (row['id'],))
-                    if task and (not row['channel'].startswith('mc:')):
+                    if task:
+                        actor = task['actor']
+                        self.direct_windows[row['channel'], actor] = time.time() + 75
+                        self.followup_turns[row['channel'], actor] = 0
+                        self.channel_speakers[row['channel']] = actor
+                    if task and task['scope'].startswith('guild:') and (not row['channel'].startswith('mc:')):
                         reference = await self.engine.conversation.reference(channel, task['message'])
                     extra = {'reference': reference} if reference else {}
                     sent = await channel.send(row['content'], allowed_mentions=discord.AllowedMentions.none(), view=view, **extra)
@@ -506,6 +554,13 @@ class Kei(LegacyKei):
                             except discord.HTTPException:
                                 pass
                         sent = await self.engine.conversation.deliver(channel, row)
+                        if sent and row['kind'] in ('reply', 'short_reply'):
+                            recipient = self.store.one('SELECT actor FROM kei_delivery_targets WHERE action=?', (row['id'],))
+                            if recipient:
+                                actor = recipient['actor']
+                                self.direct_windows[row['channel'], actor] = time.time() + 75
+                                self.followup_turns[row['channel'], actor] = 0
+                                self.channel_speakers[row['channel']] = actor
                         if sent:
                             self.store.execute('INSERT OR REPLACE INTO kei_social_sent VALUES (?,?)', (row['id'], str(sent)))
                             schedules = self.store.rows("SELECT id,owner FROM kei_schedules WHERE status='pending' AND request_message=?", (row['message'],))

@@ -26,6 +26,7 @@ def install(store):
     CREATE TABLE IF NOT EXISTS kei_relationship_preferences(person TEXT PRIMARY KEY,settings TEXT);
     CREATE TABLE IF NOT EXISTS kei_social_moods(person TEXT,scope TEXT,tone TEXT,source TEXT,at REAL,PRIMARY KEY(person,scope));
     CREATE TABLE IF NOT EXISTS kei_relationship_signals(id TEXT PRIMARY KEY,person TEXT,scope TEXT,direction TEXT,dimension TEXT,delta REAL,sources TEXT,action TEXT,at REAL);
+    CREATE TABLE IF NOT EXISTS kei_relationship_delta_events(id TEXT PRIMARY KEY,person TEXT,scope TEXT,delta REAL,sources TEXT,at REAL);
     CREATE TABLE IF NOT EXISTS kei_emotion_credits(person TEXT,scope TEXT,source TEXT,kind TEXT,at REAL,PRIMARY KEY(person,scope,source));
     CREATE TABLE IF NOT EXISTS kei_relationship_change_directions(id TEXT PRIMARY KEY,direction TEXT);
     CREATE TABLE IF NOT EXISTS kei_group_observations(
@@ -115,13 +116,15 @@ class Relationships:
 
     def emotion_credit(self,person,scope,kind,rows):
         """A distinct real apology/conflict can matter inside a conversation session."""
-        if kind not in ('conflict','reconciliation'):return False
+        if kind not in ('conflict','reconciliation','warm_exchange','milestone'):return False
         own=[r for r in rows if r['role']=='user' and self.identity.person_for_user(r['user'])==person]
         text=' '.join(direct_words(r) for r in own)
         if kind=='reconciliation' and not re.search(r'xin lỗi|sorry|soww?y|sowwy|làm hòa|thôi mà',text,re.I):return False
         if not own:return False
+        if kind in ('warm_exchange','milestone') and not any(r['role']=='assistant' for r in rows):return False
+        if kind=='warm_exchange' and not any(len(direct_words(r).strip())>=18 for r in own):return False
         now=max(r['at'] for r in own)
-        if self.db.one('SELECT source FROM kei_emotion_credits WHERE person=? AND scope=? AND kind=? AND at>?',(person,scope,kind,now-3600)):return False
+        if self.db.one('SELECT source FROM kei_emotion_credits WHERE person=? AND scope=? AND kind=? AND at>?',(person,scope,kind,now-(900 if kind=='warm_exchange' else 3600))):return False
         if self.db.one('SELECT count(*) n FROM kei_emotion_credits WHERE person=? AND at>?',(person,now-86400))['n']>=4:return False
         # An existing credit for the same human message cannot change kind and count twice.
         if any(self.db.one('SELECT source FROM kei_emotion_credits WHERE person=? AND scope=? AND source=?',(person,scope,r['id'])) for r in own):return False
@@ -390,6 +393,12 @@ class Relationships:
         deltas={k:(float(after.get(k,0))-float(before.get(k,0)))*(-1 if k=='tension' else 1) for k in ('trust','warmth','playfulness','tension')}
         key=max(deltas,key=lambda k:abs(deltas[k]))
         delta=deltas['trust']*1.4+deltas['warmth']+deltas['playfulness']*.45+deltas['tension']*.8
+        ident=hashlib.sha256((person+scope+dumps(sources)).encode()).hexdigest()[:24]
+        if abs(delta)<.000001:return None
+        self.db.execute('INSERT OR IGNORE INTO kei_relationship_delta_events VALUES (?,?,?,?,?,?)',(ident,person,scope,delta,dumps(sources),now))
+        last=self.db.one("SELECT max(s.at) at FROM kei_relationship_signals s JOIN kei_social_actions a ON a.id=s.action WHERE s.person=? AND s.scope=? AND a.status IN ('pending','sending','sent','uncertain')",(person,scope))
+        through=max(now-1800,(last or {}).get('at') or 0)
+        delta=self.db.one('SELECT coalesce(sum(delta),0) n FROM kei_relationship_delta_events WHERE person=? AND scope=? AND at>?',(person,scope,through))['n']
         if abs(delta)<max(.005,float(threshold)):return None
         interval=45 if abs(delta)>=.035 else 180
         previous=self.db.one("SELECT s.at FROM kei_relationship_signals s JOIN kei_social_actions a ON a.id=s.action WHERE s.person=? AND s.scope=? AND s.at>? AND a.status IN ('pending','sending','sent') ORDER BY s.at DESC LIMIT 1",(person,scope,now-interval))
@@ -406,6 +415,7 @@ class Relationships:
         sources = set(sources)
         if scope:self.db.execute('DELETE FROM kei_social_moods WHERE person=? AND scope=?',(person,scope))
         else:self.db.execute('DELETE FROM kei_social_moods WHERE person=?',(person,))
+        self.db.execute('DELETE FROM kei_relationship_delta_events WHERE person=?'+(' AND scope=?' if scope else ''),(person,scope) if scope else (person,))
         self.db.execute('DELETE FROM kei_emotion_credits WHERE person=?'+(' AND scope=?' if scope else ''),(person,scope) if scope else (person,))
         for signal in self.db.rows('SELECT * FROM kei_relationship_signals WHERE person=?',(person,)):
             if (not scope or signal['scope']==scope) and (not sources or sources.intersection(json.loads(signal['sources']))):self.db.execute('DELETE FROM kei_relationship_signals WHERE id=?',(signal['id'],))

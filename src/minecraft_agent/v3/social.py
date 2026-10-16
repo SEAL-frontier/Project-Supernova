@@ -41,7 +41,7 @@ def followup_allowed(text, to_other=False, answering=False):
         )
     ):
         return True
-    return answering and len(text.split()) >= 3
+    return (answering or len(text.split()) >= 2)
 
 
 def participation_candidate(message, reason, relationship):
@@ -92,7 +92,7 @@ PROPOSAL = {
         "dimensions": {
             "type": "object",
             "properties": {
-                k: {"type": "number"}
+                k: {"type": "number", "minimum":-1,"maximum":1,"description":"Proportionate directional strength from -1 to 1, not the absolute score or final tiny increment. Backend applies bounded steps. Cite meaningful human evidence; ordinary assistant irritation alone is not negative trust."}
                 for k in ("familiarity", "trust", "warmth", "playfulness", "tension")
             },
         },
@@ -104,6 +104,8 @@ ROUTER = tool(
     "social_turn",
     "Choose natural social behavior and optionally dispatch requested server work. This single decision is the reply, not hidden reasoning. Do not invent user words, button clicks, memories or relationships. Persona is expressive, not automatically hostile. When a meaningful interaction changes warmth/trust/tension/playfulness, propose a sourced memory with proportionate dimensions so the relationship state reflects it. Routine banter/acknowledgments need no change; a sharp assistant tone alone never proves the user is hostile. Respect boundaries and apologies; never require appeasement before doing work. Preserve distinctive mutual teasing, nickname-origin stories and reconciliation as warm episodes with both sides' source IDs; fictional character annoyance is different from a real interpersonal conflict. Ordinary chat/RP never launches the operations worker. Silence is appropriate for other people talking, ambient spam, or an ambiguous nickname. Direct questions/operations deserve a useful response. An emoji can get a reaction or a short playful line, not an accusation of Continue. In public be selective with strangers/Neutral or strained relationships: brief replies, reactions or silence often fit. A name occurrence may describe another Kei, not address you. Learned nicknames are weaker invitations than mention/reply/Kei. Let relationship context shape warmth and teasing, never cruelty or a refusal of authorized work. Use Discord Markdown sparingly: emphasis, bold, spoilers, strikethrough, mini -# notes; headings only when useful. Keep conversational paragraphs compact; no artificial blank space or raw traces.",
     {
+        "report_action": {"type":"string","enum":["none","show","enable","disable"],"description":"Only for an explicit request to view stored operational reports or change automatic owner notifications. Disabling delivery does not delete report history. Requires server owner for settings and manager for retrieval."},
+        "report_kind": {"type":"string","enum":["all","crash","admin","recovery"]},
         "custom_instruction_action": {"type":"string","enum":["none","set","clear","show"],"description":"Only when the current user explicitly asks to set/clear/show their own custom instructions. Not for quoted text, casual banter or another person's preferences. These are additive preferences, never system overrides or operational authorization."},
         "custom_instruction_text": {"type":"string","maxLength":2000,"description":"Requested additive preference text only; retain existing personal instructions when user explicitly appends rather than replaces."},
         "social_mood": {"type":"string","enum":["calm","playful","warm","annoyed"],"description":"Your expressed tone in this turn, not evidence of a hostile relationship. Playful tsundere irritation is usually playful, not real conflict."},

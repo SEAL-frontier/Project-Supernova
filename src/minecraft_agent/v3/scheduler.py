@@ -150,6 +150,7 @@ def next_run(schedule, after=None):
 
 def parse_schedule_text(text, timezone="Asia/Ho_Chi_Minh", now=None):
     value = str(text).strip().casefold()
+    value = re.sub(r'(?<!\d)(\d):(\d{2})(?=\s|$)',r'0\1:\2',value)
     zone = _zone(timezone)
     now = time.time() if now is None else float(now)
     local = datetime.fromtimestamp(now, zone)
@@ -190,7 +191,7 @@ def parse_schedule_text(text, timezone="Asia/Ho_Chi_Minh", now=None):
     if value.startswith("cron "):
         return validate_schedule({"kind": "cron", "cron": value[5:], "timezone": timezone})
     tomorrow = False
-    for prefix in ("ngày mai ", "tomorrow "):
+    for prefix in ("ngày mai ", "mai ", "tomorrow "):
         if value.startswith(prefix):
             tomorrow = True
             value = value[len(prefix) :].strip()
@@ -251,7 +252,7 @@ class Scheduler:
         return [
             self._public(r)
             for r in self.db.rows(
-                "SELECT * FROM kei_schedules WHERE owner=? ORDER BY created DESC LIMIT 100",
+                "SELECT * FROM kei_schedules WHERE owner=? ORDER BY CASE WHEN status IN ('completed','cancelled') THEN 1 ELSE 0 END,created DESC LIMIT 100",
                 (str(owner),),
             )
         ]

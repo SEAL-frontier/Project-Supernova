@@ -66,7 +66,7 @@ class Conversation:
             status=self.db.one('SELECT status FROM kei_tasks WHERE id=?',(task,))
             if scheduled and status and status['status'] in ('succeeded','failed'):
                 text=str(text)+'\n\n-# '+('✓ Task hoàn tất' if status['status']=='succeeded' else '✕ Task chưa hoàn tất')
-        parts = chunks(text)
+        parts = chunks(text) if confirm_task else chat_chunks(text)
         ids = []
         for index, part in enumerate(parts):
             ident = uid()

@@ -15,7 +15,7 @@ DEFAULT_BRANDING = {
     "bot_name": "Kei",
     "deployment_label": "Self-hosted Minecraft copilot",
     "tagline": "Her problem. Your server.",
-    "intro": "Một người bạn để trò chuyện. Một copilot để chăm Minecraft. Cùng một Kei, biết lúc nào nên nghe và lúc nào cần bắt tay vào việc.",
+    "intro": 'A friend to chat with. A copilot to run Minecraft. One Kei who knows when to listen and when to get to work.',
     "repo_url": "https://github.com/TonyBucket/keys-keys",
     "community_url": "",
 }
@@ -25,7 +25,7 @@ def branding(values=None):
     if values is None:
         values = {}
     if not isinstance(values, dict) or set(values) - set(DEFAULT_BRANDING):
-        raise ValueError("web.branding có trường chưa hỗ trợ; xem docs/SETTINGS.md.")
+        raise ValueError('web.branding contains unsupported fields; see docs/SETTINGS.md.')
     out = {**DEFAULT_BRANDING, **values}
     for key, limit in (
         ("name", 50),
@@ -41,14 +41,14 @@ def branding(values=None):
             or len(value) > limit
             or re.search(r"[\x00-\x1f\x7f]", value)
         ):
-            raise ValueError("web.branding." + key + " cần một đoạn chữ ngắn, hợp lệ.")
+            raise ValueError("web.branding." + key + ' needs a short, valid piece of text.')
         out[key] = value.strip()
     for key in ("repo_url", "community_url"):
         value = out[key]
         if key == "community_url" and value == "":
             continue
         if not isinstance(value, str) or len(value) > 500:
-            raise ValueError("web.branding." + key + " cần URL HTTPS.")
+            raise ValueError("web.branding." + key + ' requires an HTTPS URL.')
         parsed = urlsplit(value)
         if (
             parsed.scheme != "https"
@@ -59,7 +59,7 @@ def branding(values=None):
             or parsed.fragment
             or re.search(r"[\s\\]", value)
         ):
-            raise ValueError("web.branding." + key + " cần URL HTTPS không kèm credential/query.")
+            raise ValueError("web.branding." + key + ' requires an HTTPS URL without credentials or query parameters.')
         if key == "community_url":
             host = parsed.hostname.casefold()
             path = parsed.path.rstrip("/")
@@ -70,7 +70,7 @@ def branding(values=None):
                     and re.fullmatch(r"/invite/[A-Za-z0-9-]{2,100}", path)
                 )
             ):
-                raise ValueError("community_url cần link invite Discord thật, hoặc để trống.")
+                raise ValueError('community_url requires a real Discord invite link, or leave it blank.')
         out[key] = value
     return out
 
@@ -86,7 +86,7 @@ def render_home(nonce, values=None, auth_ready=True):
         (
             '<a href="'
             + escape(chosen["community_url"], quote=True)
-            + '" target="_blank" rel="noopener noreferrer">Discord cộng đồng <span aria-hidden="true">↗</span></a>'
+            + '" target="_blank" rel="noopener noreferrer">Community Discord <span aria-hidden="true">↗</span></a>'
         )
         if chosen["community_url"]
         else ""
@@ -101,10 +101,10 @@ def render_home(nonce, values=None, auth_ready=True):
             'href="#login-help" aria-disabled="true" data-login-link',
         )
         content = content.replace("__LOGIN_HELP_CLASS__", "notice notice-setup")
-        content = content.replace("__LOGIN_STATE__", "Discord login chưa sẵn sàng")
+        content = content.replace("__LOGIN_STATE__", 'Discord login is not ready')
     else:
         content = content.replace("__LOGIN_HELP_CLASS__", "notice notice-setup hidden")
-        content = content.replace("__LOGIN_STATE__", "Đăng nhập bằng Discord")
+        content = content.replace("__LOGIN_STATE__", 'Log in with Discord')
     return content
 
 

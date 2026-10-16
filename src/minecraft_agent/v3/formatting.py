@@ -4,16 +4,30 @@ import re
 
 
 def chat_chunks(text, limit=2000):
-    """Compact conversation text without splitting messages on spaces/newlines."""
-    output=[];fenced=False;blank=False
+    """Line-separated conversation bubbles; fenced code and structured lists stay together."""
+    result=[];buffer=[];fenced=False;structured=False
+    def flush():
+        nonlocal buffer
+        body='\n'.join(buffer).strip()
+        if body:result.extend(chunks(body,limit))
+        buffer=[]
     for line in str(text or '').strip().splitlines():
-        if line.lstrip().startswith('```'):fenced=not fenced
-        if not fenced and not line.strip():
-            if blank:continue
-            blank=True
-        else:blank=False
-        output.append(line if fenced else line.rstrip())
-    return chunks('\n'.join(output),limit)
+        marker=line.lstrip().startswith('```')
+        if marker:
+            if not fenced:flush()
+            buffer.append(line);fenced=not fenced
+            if not fenced:flush()
+            continue
+        if fenced:buffer.append(line);continue
+        if line.startswith('-#') and result and not buffer:
+            prior=result.pop();result.extend(chunks(prior+'\n'+line,limit));continue
+        is_structure=bool(re.match(r'^\s*(?:[-*+] |\d+[.)] |> |#{1,3} )',line))
+        if is_structure:buffer.append(line);structured=True
+        elif not line.strip():flush();structured=False
+        elif structured:buffer.append(line)
+        else:buffer.append(line);flush()
+    flush()
+    return result
 
 
 def chunks(text, limit=2000):

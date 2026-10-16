@@ -60,7 +60,7 @@ def render(task,progress,mode,note=False):
         return text if len(text)<=n else text[:n-1].rstrip()+'…'
     objective=task['goal'].split('\nAdditional requester instruction:',1)[0]
     lines=[clean(objective,110)]
-    if task['status']=='running':lines+=['','**Đang:** '+clean(progress['phase'],100)]
+    if task['status']=='running':lines+=['','**Đang:** '+clean(re.sub(r'^(?:Đang[ :]+)+','',progress['phase'],flags=re.I),100)]
     icons={'pending':'☐','running':'◉','done':'☑','skipped':'—'}
     steps=json.loads(progress['steps'])
     if steps:lines.append('')

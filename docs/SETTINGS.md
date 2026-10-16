@@ -34,7 +34,7 @@ Use **revoke** to remove operational access or **unadmin** to remove delegated a
 
 Open `/settings` → **Lịch hẹn & công việc định kỳ**, or use **`/tasks`**. Enter what to do, a time such as `ngày mai 07:00` or `mỗi ngày 07:00`, and your timezone. Choose **alarm** for a reminder, **observe** for server checks or **change** for authorized server work. Server work needs an assigned server; reminders do not.
 
-New schedules stay pending until you press **🕒 Xác nhận lịch** on the private acknowledgement. Discord ephemeral messages cannot receive reactions, so this private button provides the explicit clock confirmation. Editing or resuming a schedule requires confirmation again. You can inspect, edit, pause, resume and cancel only your own schedules. Permissions are checked again when a server task runs; a schedule does not bypass normal dangerous-action approval.
+New schedules stay pending until you press **🕒 Xác nhận lịch** on the private acknowledgement. Discord ephemeral messages cannot receive reactions, so this private button provides the explicit clock confirmation. Editing or resuming a schedule requires confirmation again. You can inspect, edit, pause, resume and cancel only your own schedules. Permissions are checked again when a server task runs; a schedule uses the same current run mode and assignment checks.
 
 The web screen has the same controls. Web-created schedules deliver in your Discord DM. A web confirmation is recorded as a web acknowledgement, never as a fabricated Discord reaction. An alarm being delivered does not prove that you woke up or read it.
 
@@ -130,14 +130,66 @@ In **Người có quyền**, select a server and person. Owners can set two sepa
 
 | Level | Behavior |
 | --- | --- |
-| Default | Routine requested changes run; dangerous steps need confirmation. |
-| Auto-review | A separate model review can approve bounded elevated steps. Destructive host commands, forced kill and remove/restore still ask the requester. Review failures fall back to asking. |
-| Read only | Reads run; every write waits for requester confirmation. Existing observation-only tasks remain observation-only. |
+| Default | Routine work runs in scope; risky steps receive internal review. |
+| Auto-review | Changes are reviewed automatically; denied steps return to the worker for replanning, without an owner ticket. |
+| Read only | Diagnostics run; writes need an eligible server or host owner approval. Observation-only tasks still cannot mutate. |
 | Full access | Executes within the explicitly granted scope without per-step approval. Assignment, target validation, backups and verification still apply. |
-| Custom | Uses operator `approval_rules` per tool (`allow`, `ask`, `deny`). Unknown tools ask; cannot expand the selected scope. |
+| Custom | Editable TOML tool/path/command rules (`allow`, `deny`, `auto_review`), enforced before dispatch. Scope is never expanded. |
 
-Example operator profile addition: `approval_rules: {files: ask, power: ask, remote_shell: deny}`. Custom is unavailable until rules exist. Admin delegation alone cannot issue host scope or bypass the owner's execution profile. Revocation sets conversation-only plus Minecraft/read-only to remove previously granted host execution.
+Custom can be edited directly in the Web config.toml editor; a separate operator-only setup step is no longer required. Legacy ask rules become auto_review. Admin delegation alone cannot issue host scope or bypass the owner's execution profile. Revocation sets conversation-only plus Minecraft/read-only to remove previously granted host execution.
 
 Unsolicited public participation is removed. Old ambient settings are ignored. `kei` is the default configurable trigger; learned aliases only apply to the person who established them. The public followup window is at most two candidates, expires after 45 seconds by default, and closes when another person speaks. A candidate still may be ignored or receive only a reaction. Direct mentions, replies and actual work are stronger signals.
 
 For opt-in private conversation, say “nhắn mình nhiều hơn”, “ít lại” or “đừng chủ động nhắn nữa”. Kei records the preference and adjusts future initiative using relationship/context. This is not a fixed-time reminder; use scheduled tasks for exact times. Quiet hours remain a boundary, not a send schedule.
+
+
+## People, roles and reports
+
+Open **People with access** / **Người có quyền**, choose a server, then find a Discord user ID. The roster shows display names, avatars when Discord provides them, who granted access and the effective execution policy. Use **Edit my permissions** on your own card to change your execution policy.
+
+| Role | What it allows |
+|---|---|
+| Viewer | Read status, metrics and logs |
+| Moderator | Request Minecraft operations |
+| Admin | Manage viewer/moderator grants, plus the selected read/operation access |
+| Co-owner | Equal management authority for this server, including admins and other co-owners |
+
+The original configured owner stays protected. Co-ownership does not grant the bot operator account or host SSH authority. Full Machine needs an existing SSH connector and an explicit host grant. Relationship rank grants no access.
+
+**Custom** opens a validated TOML editor for allow, deny and auto_review rules. Deny blocks the selected tool, including reads; automatic review applies to changes. Choosing Allow never expands the selected server/host scope or an observation-only task. Revocation, grants and policy changes share the same access audit as Discord.
+
+Under the same server, choose which crash, delegated-admin/moderator and recovery reports should arrive in your own DM. Turn delivery off to keep the history without notifications. Ask “Kei, tắt thông báo thao tác admin cho server A” or “Kei, xem báo cáo server A gần đây”. Report retrieval requires management access. New co-owners have independent notification preferences.
+
+Completed/cancelled schedules leave the active Web list automatically; execution history remains in storage. Edit a pending/active/paused schedule to change its job or time; leave time blank while editing to retain the previous schedule. Changes require confirmation again.
+
+
+### Minecraft-only / Host User / Full Machine · Root
+
+- **Minecraft-only** keeps general host shell unavailable; typed server tools remain scoped to the selected server.
+- **Host User** executes as the configured ordinary SSH account (for example `wrc`). It disables automatic sudo and rejects explicit elevation commands. It is an execution policy, not an OS sandbox. Use a non-root SSH account; root/Administrator credentials cannot be relabeled as an ordinary user.
+- **Full Machine · Root** uses the configured account's real OS elevation. Linux SSH verifies UID 0 before commands. With sudo enabled (the default), stored SSH credentials go over stdin to `sudo -S`; NOPASSWD is not mandatory. An SSH root account runs directly. Commands run separately; there is no persistent interactive `sudo -s` session.
+
+For Linux hosts that require `su`, an operator may set `connectors.ssh.elevation: su` and `root_password: secret:root-password` in private configuration. The helper uses a non-echoing PTY and `su -c` with a bounded command. This fallback requires its own host acceptance; binary reads over that PTY are refused to avoid corrupting files. Current production acceptance covers Linux sudo. Windows local/companion connectors retain their existing OS identity; this Linux root control does not claim Windows Administrator elevation.
+
+Legacy explicit `machine` grants retain their Root meaning. New Host User grants never acquire root simply because the connected account could use sudo.
+
+Host User / Root chooses the identity of SSH commands. Panel, Wings and plugin actions keep their own scoped connector permissions. General shell accepts an optional absolute `cwd`; read-only host inspection can fall back to SSH home if the Minecraft directory is inaccessible, while mutations never silently move to a different directory.
+
+
+## Current run modes (3.2.0-rc.2)
+
+Access scope answers **where**; run mode answers **how work is reviewed**. Select the person, then a mode card:
+
+| Mode | Behavior |
+|---|---|
+| Default permissions | Ordinary authorized work runs in scope. Risky steps receive an internal review. |
+| Auto-review | Changes and elevated steps receive an automatic allow/deny decision. A denial returns to the worker to replan; it does not send an owner approval ticket. |
+| Read only | Diagnostics remain available. Changes wait for an eligible server owner, or host owner when host scope is involved. The original requester cannot approve someone else's authority. |
+| Full access | Authorized changes execute without per-step approval/review; assignments, selected scope, backups and verification still apply. |
+| Custom (config.toml) | Uses validated `[tools]`, `[paths]` and `[shell]` rules. Each tool can allow, deny or auto_review. Path/command glob lists narrow the existing scope. Unsupported fields fail visibly. |
+
+Custom is an application policy, not an OS sandbox. Old `ask` rules migrate to `auto_review`; choose Read only for manual escalation. Existing explicit host grants keep their identity. A co-owner may adjust their own already-granted host policy without gaining permission to grant host access to others.
+
+Routine admin activity DMs default to **Save only**. Each owner can opt in independently. Read-only approval requests are a separate workflow and remain visible when an actual approval is required.
+
+The dashboard is now English. Discord conversation/persona language is unchanged. The run-mode cards and Custom editor replace the former ambiguous action/policy dropdown UX.

@@ -144,7 +144,7 @@ class Memory:
         self.relationships.observe(person, scope, digest, kind, rows)
         social_kind = kind in ('warm_exchange', 'nickname', 'milestone', 'conflict', 'reconciliation', 'boundary')
         new_session = self.relationships.credit(person, scope, digest, rows) if social_kind else False
-        emotional = self.relationships.emotion_credit(person, scope, kind, rows)
+        emotional = self.relationships.emotion_credit(person, scope, kind, rows) if not new_session else False
         meaningful = self.db.one("SELECT count(*) n FROM kei_relationship_credits c JOIN kei_social_events e ON e.id=c.event WHERE c.person=? AND c.at>? AND e.kind IN ('warm_exchange','nickname','milestone','conflict','reconciliation','boundary')", (person, now - 86400))['n']
         if meaningful <= 5 and new_session:
             profile['familiarity'] = min(1, profile['familiarity'] + 0.01)

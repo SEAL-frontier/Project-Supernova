@@ -1,8 +1,37 @@
 # Changelog
 
-Current public version: **3.1.0-rc.4**. Architecture: **Supernova**.
+Current public version: **3.2.0-rc.2**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.2.0-rc.2 — Work until done, keep the owner inbox quiet
+
+- Correct the run-mode contract: Default checks risky work internally; Auto-review reviews changes automatically; Full access executes authorized work without per-step prompts. Only Read only forwards a write approval to an eligible server/host owner. Reports never grant authority or imply an approval requirement.
+- Replace the run-mode dropdown with clear selectable cards. Custom now edits and validates actual TOML tool/path/command rules, including allow, deny and auto_review. Scope grants remain separate from run modes.
+- Remove overall job time/turn/call-budget cutoffs and the repeated “saved progress; say continue” message. Persist each cycle, retry transient model failures, and report a concrete freeze/blocker instead. Preserve I/O deadlines for hung external calls and uncertain-mutation recovery.
+- Resume the same task for an explicit “continue”. Preserve completed mutation receipts across restarts/compaction and avoid executing an identical completed mutation again.
+- Add bounded server filename search and persisted task-evidence retrieval. Missing source files require an upload/exact path, rather than repeatedly searching unrelated plugin folders. Compact operational noise while retaining receipts, goals and recent turns.
+- Make routine delegated-admin reports opt-in. Keep report history queryable when notifications are off. Show actual current access/run-mode facts to the social router.
+- Relax same-person conversation follow-ups after a real reply. Short acknowledgments can get a cheap reaction, and a legitimate continued conversation no longer fails a random participation gate. Other speakers still break the window; ambient auto-engagement stays off.
+- Switch the entire Web interface to English, including dashboard, setup guidance, permission descriptions and actionable Web API errors. Personal names, memories and user-authored task/report content retain their own language.
+- Fix the Web schedule example “mai 7:00” and preserve existing time when editing only a job. Completed/cancelled schedules stay out of the active list.
+
+rc.1 snapshots were operator deployments used for feedback, not a separate public release. This prerelease includes those changes plus the corrections above; longitudinal social and independent novice acceptance remain open.
+
+## 3.2.0-rc.1 — Less noise, actual controls
+
+- Fix repeated restart/reconcile notices with durable per-task deduplication and grouped delivery. Import old operational results without sending them again.
+- Monitor normal startup/shutdown as lifecycle states; allow ten minutes for boot. Store investigations privately, show Vietnamese summaries, suppress healthy conclusions, and use structured normal/issue/unknown outcomes.
+- Store owner-scoped reports separately from DM preferences. Crash, delegated-administration and recovery notifications can each be disabled in the access UI or through explicit chat requests; saved reports remain retrievable.
+- Replace the access action dropdown with named roles: viewer, moderator, admin and server co-owner. Add self policy editing, scoped co-ownership, atomic changes and a working per-tool Custom policy editor.
+- Show configured connection types in the Minecraft list. Hide finished/cancelled schedules from the active list; pending schedules can be edited/cancelled, and editing only the job preserves its time.
+- Split normal conversational lines into Discord messages while keeping fenced code/structured lists intact. Keep approval text with its button; approval summaries do not dump shell JSON. Remove duplicated progress prefixes and unnecessary DM task references.
+- Split host scope into **Host User** (the connected SSH user, no automatic sudo) and **Full Machine · Root** (verified UID 0, configured sudo/direct-root; optional Linux su fallback). Preserve existing machine grants; isolate identities between concurrent tasks.
+- Fix host inspection failing before execution when an ordinary SSH account cannot enter the Minecraft volume. Read-only inspection may use SSH home; writes require the original or explicitly selected absolute directory.
+- Give the social router current execution policy and adapter capabilities. Configured SSH sudo may use stored credentials; do not claim NOPASSWD is required without checking.
+- Permit bounded meaningful warm exchanges within a session. Accumulate small sourced relationship deltas over thirty minutes for DBH-style current-state arrows; retain anti-spam, cooldown, privacy/forgetting and stable-rank hysteresis.
+
+Still a prerelease: long-term social behavior and independent fresh-user acceptance need real field feedback. Public source excludes private persona, credentials, production memories and local instrumentation.
 
 ## 3.1.0-rc.4 — One more message, when you asked for it
 

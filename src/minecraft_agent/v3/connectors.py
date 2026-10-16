@@ -73,7 +73,7 @@ class HybridTools(ServerTools):
             for k, v in (
                 (key, secrets.get(val))
                 for key, val in c.items()
-                if key in ("token", "password", "key_password")
+                if key in ("token", "password", "key_password", "root_password")
             )
             if v
         ]
@@ -149,18 +149,15 @@ class HybridTools(ServerTools):
 
     def shell(self, command, timeout=60, sudo=True):
         c = self.client()
-        password = self.secret_store.get(self.cs["ssh"].get("password"))
-        sudo = sudo and self.cs["ssh"].get("sudo", True)
-        emit_progress("command", "SSH $ " + command)
+        from .execution import prepare_ssh
         try:
-            if sudo:
-                command = (
-                    ('sudo -S -p "" ' if password else "sudo -n ") + "sh -c " + shlex.quote(command)
-                )
-            i, o, e = c.exec_command(command, timeout=timeout)
-            if sudo and password:
-                i.write(password + "\n")
-                i.flush()
+            emit_progress("command", "SSH $ " + command)
+            command,password,pty=prepare_ssh(self.cs['ssh'],self.secret_store,command,sudo)
+            kwargs={'timeout':timeout}
+            if pty:kwargs['get_pty']=True
+            i,o,e=c.exec_command(command,**kwargs)
+            if password:
+                i.write(password+'\n');i.flush()
             i.channel.shutdown_write()
             channel = o.channel
             out = bytearray()
@@ -192,6 +189,48 @@ class HybridTools(ServerTools):
             }
         finally:
             c.close()
+
+    def execute(self,name,args,mode='change',confirmed=False):
+        if name=='find_server_files':
+            return {'source':name,'server':self.p['name'],'observed_at':time.time(),**self.do_find_server_files(**args)}
+        return super().execute(name,args,mode,confirmed)
+
+    def do_find_server_files(self,pattern,limit=20):
+        import fnmatch
+        if not isinstance(pattern,str) or not 1<=len(pattern)<=180 or '/' in pattern or '\\' in pattern or '\x00' in pattern:raise ValueError('Tìm bằng tên tệp hoặc glob, không phải đường dẫn.')
+        limit=max(1,min(100,int(limit)))
+        if self.cs.get('ssh',{}).get('volume'):
+            root=self.p['volume'];result=self.shell('find '+shlex.quote(root)+' -maxdepth 6 -type f -iname '+shlex.quote(pattern)+' -print | head -n '+str(limit+1))
+            if result.get('exit_code') or result.get('stderr'):return {**result,'matches':[],'complete':False}
+            matches=[line[len(root.rstrip('/'))+1:] for line in result['stdout'].splitlines() if line.startswith(root.rstrip('/')+'/')]
+            return {'matches':matches[:limit],'complete':len(matches)<=limit,'scope':'server volume; maximum depth 6','verified':True}
+        if self.panel:
+            queue=[('',0)];matches=[];count=0
+            while queue and count<80 and len(matches)<=limit:
+                path,depth=queue.pop(0);count+=1
+                entries=self.panel.server('GET','/files/list',params={'directory':'/'+path}).get('data',[])
+                for entry in entries:
+                    row=entry.get('attributes',entry);name=row.get('name','');child=(path+'/'+name).strip('/')
+                    if not name or '/' in name or name in ('.','..'):continue
+                    if row.get('is_file',False):
+                        if fnmatch.fnmatchcase(name.casefold(),pattern.casefold()):matches.append(child)
+                    elif depth<5:queue.append((child,depth+1))
+            return {'matches':matches[:limit],'complete':not queue and len(matches)<=limit,'directories_checked':count,'verified':True}
+        return {'matches':[],'complete':False,'error':'No file-search transport available; ask for an uploaded file or an exact path.'}
+
+    def do_remote_shell(self,command,effect,cwd=None):
+        if cwd is not None:
+            if not isinstance(cwd,str) or not pathlib.PurePosixPath(cwd).is_absolute() or '\x00' in cwd:raise ValueError('Thư mục làm việc cần là đường dẫn tuyệt đối trên host.')
+            prefix='cd '+shlex.quote(cwd)+' && '
+            directory=cwd
+        else:
+            directory=self.p.get('volume','/')
+            if effect=='read':
+                # A host user can inspect its own OS identity without being able to enter
+                # a root-owned Minecraft volume. Never silently relocate a mutation.
+                prefix='if test -d '+shlex.quote(directory)+' && test -x '+shlex.quote(directory)+'; then cd '+shlex.quote(directory)+' || exit 76; fi; '
+            else:prefix='cd '+shlex.quote(directory)+' && '
+        return {**self.shell(prefix+command,timeout=180),'working_directory':cwd or ('server volume if accessible, otherwise SSH home (read only)' if effect=='read' else directory)}
 
     def api(self, method, suffix, body=None):
         if self.panel:
@@ -508,20 +547,13 @@ class HybridTools(ServerTools):
             return self.local.binary(path, cap)
         if self.cs.get("ssh", {}).get("volume"):
             c = self.client()
-            password = self.secret_store.get(self.cs["ssh"].get("password"))
             try:
-                command = "head -c " + str(cap + 1) + " " + shlex.quote(self.absolute(path))
-                sudo = self.cs["ssh"].get("sudo", True)
-                if sudo:
-                    command = (
-                        ('sudo -S -p "" ' if password else "sudo -n ")
-                        + "sh -c "
-                        + shlex.quote(command)
-                    )
-                i, o, e = c.exec_command(command, timeout=45)
-                if sudo and password:
-                    i.write(password + "\n")
-                    i.flush()
+                from .execution import prepare_ssh
+                command="head -c "+str(cap+1)+" "+shlex.quote(self.absolute(path))
+                command,password,pty=prepare_ssh(self.cs['ssh'],self.secret_store,command)
+                if pty:raise PermissionError('Binary read qua su/PTY không bảo toàn dữ liệu; cấu hình sudo hoặc dùng Panel/SFTP.')
+                i,o,e=c.exec_command(command,timeout=45)
+                if password:i.write(password+'\n');i.flush()
                 i.channel.shutdown_write()
                 raw = o.read()
                 error = e.read().decode("utf-8", "replace")

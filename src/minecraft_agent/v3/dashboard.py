@@ -20,6 +20,20 @@ LOG = logging.getLogger("kei.web")
 DISCORD = "https://discord.com/api/v10"
 
 
+def web_error(error,path=''):
+    text=str(error).strip()
+    if text and all(ord(c)<128 for c in text):return text
+    if isinstance(error,PermissionError):
+        if path.startswith('/api/access'):return 'Permission denied. Server owners manage admins, co-owners and run modes; host access also needs an operator grant.'
+        return 'You do not have permission for this server or operation. Sign in again if your access recently changed.'
+    if path.startswith('/api/tasks'):return 'Check the task, future date/time, timezone and selected server. A changed schedule needs confirmation again.'
+    if path.startswith('/api/connect'):return 'Connection failed. Check your Panel URL, Client API key and access to the selected server.'
+    if path.startswith('/api/settings'):return 'Check your settings. Use a valid timezone such as Asia/Ho_Chi_Minh and an assigned default server.'
+    if path.startswith('/oauth'):return 'This sign-in request expired or is invalid. Please sign in with Discord again.'
+    if path.startswith('/api/access'):return 'Check the Discord user ID, selected role, scope and Custom config. Unsupported rules are rejected.'
+    return 'The request could not be completed. Check your input or sign in again.'
+
+
 class OAuthClient:
     def __init__(self, client_id, client_secret, redirect_uri):
         self.client_id, self.client_secret, self.redirect_uri = (
@@ -90,7 +104,7 @@ class Dashboard:
         self.secure = True
         self.status = "disabled"
         self.auth_ready = False
-        self.setup_message = "Đăng nhập web chưa sẵn sàng: operator cần cấu hình Discord OAuth. Bạn vẫn dùng /setup và /settings trong Discord bình thường."
+        self.setup_message = "Web login is not ready: the operator must configure Discord OAuth. You can still use /setup and /settings in Discord."
         self.branding = None
 
     def configure(self):
@@ -141,11 +155,11 @@ class Dashboard:
                 response = await handler(request)
             except (PermissionError, ValueError) as exc:
                 response = web.json_response(
-                    {"error": str(exc)}, status=403 if isinstance(exc, PermissionError) else 400
+                    {"error": web_error(exc,request.path)}, status=403 if isinstance(exc, PermissionError) else 400
                 )
             except web.HTTPException as exc:
                 response = web.json_response(
-                    {"error": exc.text},
+                    {"error": ("Sign in with Discord first." if exc.status==401 else web_error(exc.text,request.path))},
                     status=exc.status,
                     headers={k: v for k, v in exc.headers.items() if k.lower() != "content-type"},
                 )
@@ -155,7 +169,7 @@ class Dashboard:
                     "DASHBOARD_REQUEST_FAILED path=%s type=%s", request.path, type(exc).__name__
                 )
                 response = web.json_response(
-                    {"error": "Chưa xử lý được. Thử lại hoặc xem diagnostics local."}, status=502
+                    {"error": "The request failed. Please try again or check local diagnostics."}, status=502
                 )
             response.headers["Cache-Control"] = "public, max-age=86400" if request.path.startswith('/assets/') and response.status==200 else "no-store"
             response.headers["X-Content-Type-Options"] = "nosniff"
@@ -171,6 +185,7 @@ class Dashboard:
         app.router.add_get("/api/state", self.state)
         app.router.add_get("/api/profile", self.profile)
         app.router.add_get("/api/memories", self.memories)
+        app.router.add_get("/api/reports", self.reports)
         app.router.add_post("/api/access/preview", self.access_preview)
         app.router.add_get("/assets/kei-spring.jpg", self.banner)
         app.router.add_post("/api/settings", self.settings)
@@ -389,6 +404,10 @@ class Dashboard:
         session=await self.session(request)
         return web.json_response(self.ux.engine.memory.episodes_page(session['user'],request.query.get('offset',0),request.query.get('limit',12),request.query.get('q','')))
 
+    async def reports(self,request):
+        session=await self.session(request)
+        return web.json_response({'items':self.ux.engine.reports.recent(session['user'],request.query.get('server',''),20)})
+
     async def access_preview(self,request):
         session=await self.session(request,True);body=await request.json()
         return web.json_response(await self.ux.access_preview(session['user'],str(body.get('server','')),str(body.get('subject',''))))
@@ -439,21 +458,30 @@ class Dashboard:
         level = body.get("level", "observe")
         if not subject.isdigit():
             raise ValueError("Discord user ID cần dạng số.")
+        if action=='save_member':
+            self.ux.access.configure_member(session['user'],subject,server,body.get('role'),level,body.get('execution'))
+            return web.json_response({'ok':True})
         # Validate and persist the effective policy with the grant in one transaction.
         if body.get('execution'):
             selected=body['execution']
             if not isinstance(selected,dict):raise ValueError('Mức quyền chưa hợp lệ.')
             with self.ux.db.atomic():
-                self.ux.access.set_policy(session['user'],subject,server,selected.get('extent'),selected.get('level'))
+                self.ux.access.set_policy(session['user'],subject,server,selected.get('extent'),selected.get('level'),selected.get('config',selected.get('rules')))
                 original=dict(body);original.pop('execution')
                 if action=='policy':return web.json_response({'ok':True})
                 # Remaining grant paths are simple local DB operations; validate action first.
                 if action=='grant':self.ux.access.grant(session['user'],subject,server,level)
                 elif action in ('admin','unadmin'):self.ux.access.delegate(session['user'],subject,server,action=='admin',level)
                 elif action=='revoke':self.ux.access.revoke(session['user'],subject,server)
+                elif action in ('owner','unowner'):self.ux.access.coowner(session['user'],subject,server,action=='owner')
                 else:raise ValueError('Thao tác chưa hợp lệ.')
             return web.json_response({'ok':True})
-        if action == "grant":
+        if action == 'reports':
+            if subject!=session['user']:raise PermissionError('Chỉ sửa thông báo của chính bạn.')
+            return web.json_response(self.ux.engine.reports.update(session['user'],server,body.get('preferences',{})))
+        if action in ('owner','unowner'):
+            self.ux.access.coowner(session['user'],subject,server,action=='owner')
+        elif action == "grant":
             self.ux.access.grant(session["user"], subject, server, level)
         elif action == "revoke":
             self.ux.access.revoke(session["user"], subject, server)
@@ -550,7 +578,7 @@ class Dashboard:
             raise ValueError("Chọn alarm, observe hoặc change.")
         values = {
             "goal": str(body.get("goal", "")),
-            "schedule": parse_schedule_text(body.get("when", ""), zone),
+            "schedule": parse_schedule_text(body.get("when", ""), zone) if str(body.get("when", "")).strip() or not body.get("id") else scheduler.get(session["user"],str(body["id"]))["schedule"],
             "server": str(body.get("server", "")).strip() or None,
             "mode": "observe" if mode == "alarm" else mode,
             "alarm": mode == "alarm",
