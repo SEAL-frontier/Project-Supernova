@@ -262,23 +262,30 @@ class UserExperience:
         """Apply the owner's persisted bot-wide defaults before commands start."""
         rows=self.db.rows('SELECT key,value FROM kei_global_settings')
         saved={row['key']:json.loads(row['value']) for row in rows}
+        from .runtime_settings import apply
+        apply(self.cfg,saved)
         if 'timezone' in saved:self.cfg['timezone']=saved['timezone']
         if 'allow_self_service' in saved:self.cfg['allow_self_service']=bool(saved['allow_self_service'])
         if 'default_run_mode' in saved:self.cfg['default_execution_mode']=saved['default_run_mode']
         self.engine.cfg.update(self.cfg)
+        if hasattr(self.engine.model,'for_model'):self.engine.model.model=self.cfg.get('agent_model','ag/gemini-3.8-flash-high')
 
     def global_settings(self,user):
         if str(user)!=str(self.cfg['owner_id']):raise PermissionError('Chỉ main owner mới chỉnh được bot-wide settings.')
         saved={row['key']:json.loads(row['value']) for row in self.db.rows('SELECT key,value FROM kei_global_settings')}
-        return {'timezone':str(self.cfg.get('timezone','Asia/Ho_Chi_Minh')),
+        from .runtime_settings import read
+        return {**read(self.cfg),'timezone':str(self.cfg.get('timezone','Asia/Ho_Chi_Minh')),
                 'allow_self_service':bool(self.cfg.get('allow_self_service',False)),
                 'default_run_mode':self.cfg.get('default_execution_mode','default')}
 
     def update_global_settings(self,user,values):
         if str(user)!=str(self.cfg['owner_id']):raise PermissionError('Chỉ main owner mới chỉnh được bot-wide settings.')
-        if not isinstance(values,dict) or not values or not set(values)<= {'timezone','allow_self_service','default_run_mode'}:
+        from .runtime_settings import DEFAULTS, validate
+        if not isinstance(values,dict) or not values or not set(values)<= set(DEFAULTS)|{'timezone','allow_self_service','default_run_mode'}:
             raise ValueError('Chọn timezone, self-service hoặc default approval mode hợp lệ.')
         updated=self.global_settings(user)
+        for key,value in values.items():
+            if key in DEFAULTS:updated[key]=validate(key,value)
         if 'timezone' in values:
             try:
                 from zoneinfo import ZoneInfo
@@ -298,6 +305,8 @@ class UserExperience:
         self.cfg['timezone']=updated['timezone'];self.engine.cfg['timezone']=updated['timezone']
         self.cfg['allow_self_service']=updated['allow_self_service'];self.engine.cfg['allow_self_service']=updated['allow_self_service']
         self.cfg['default_execution_mode']=updated['default_run_mode'];self.engine.cfg['default_execution_mode']=updated['default_run_mode']
+        self._load_global_defaults()
+        if getattr(self.engine,'bridge',None):self.engine.bridge.refresh_aliases()
         return updated
 
     def person(self, user):

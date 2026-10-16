@@ -215,6 +215,7 @@ class Dashboard:
         app.router.add_get("/oauth/callback", self.callback)
         app.router.add_get("/api/state", self.state)
         app.router.add_get("/api/global/overview", self.global_overview)
+        app.router.add_get("/api/global/relationships", self.global_relationships)
         app.router.add_get("/api/global/settings", self.global_settings)
         app.router.add_post("/api/global/settings", self.update_global_settings)
         app.router.add_get("/api/profile", self.profile)
@@ -521,77 +522,14 @@ class Dashboard:
     async def global_overview(self,request):
         session=await self.session(request)
         self.require_bot_owner(session)
-        db=self.ux.db;now=self.clock();cutoff=now-15*60
-        activity=db.rows("SELECT user,scope,count(*) message_count,max(at) last_at FROM kei_messages WHERE role='user' AND forgotten=0 GROUP BY user,scope ORDER BY last_at DESC")
-        by_user={};by_scope={}
-        for row in activity:
-            uid=str(row['user']);scope=str(row['scope'])
-            user=by_user.setdefault(uid,{'id':uid,'message_count':0,'last_at':0,'sessions':[]})
-            user['message_count']+=int(row['message_count']);user['last_at']=max(user['last_at'],float(row['last_at'] or 0))
-            user['sessions'].append({'scope':scope,'message_count':int(row['message_count']),'last_at':float(row['last_at'] or 0),'active':float(row['last_at'] or 0)>=cutoff})
-            scope_data=by_scope.setdefault(scope,{'scope':scope,'message_count':0,'last_at':0,'people':set()})
-            scope_data['message_count']+=int(row['message_count']);scope_data['last_at']=max(scope_data['last_at'],float(row['last_at'] or 0));scope_data['people'].add(uid)
-        totals={'people':len(by_user),'messages':sum(x['message_count'] for x in by_user.values()),
-                'active_dms':sum(1 for s in by_scope.values() if s['scope'].startswith('dm:') and s['last_at']>=cutoff),
-                'active_channels':sum(1 for s in by_scope.values() if s['scope'].startswith('guild:') and s['last_at']>=cutoff)}
-        people_rows={str(r['user_id']):r for r in db.rows('SELECT user_id,username,global_name,account_display FROM kei_users')}
-        guild_to_server={str(guild):sid for sid,p in self.ux.engine.servers.items() for guild in p.get('guilds',[])}
-        def scope_label(scope):
-            parts=scope.split(':')
-            if parts[0]=='dm':return 'DM · '+(people_rows.get(parts[1],{}).get('global_name') or people_rows.get(parts[1],{}).get('username') or parts[1])
-            if parts[0]=='guild' and len(parts)>=3:
-                sid=guild_to_server.get(parts[1]);server=self.ux.engine.servers.get(sid,{}) if sid else {}
-                channel=self.ux.bot.get_channel(int(parts[2])) if str(parts[2]).isdigit() and hasattr(self.ux.bot,'get_channel') else None
-                return (server.get('name')+' · ' if server else 'Discord · ')+('#'+getattr(channel,'name',parts[2]))
-            return scope[:100]
-        active=[];server_totals={}
-        for value in by_scope.values():
-            parts=value['scope'].split(':')
-            if parts[0]=='guild' and len(parts)>1:
-                sid=guild_to_server.get(parts[1])
-                if sid:server_totals[sid]=server_totals.get(sid,0)+value['message_count']
-        for value in sorted((x for x in by_scope.values() if x['last_at']>=cutoff),key=lambda x:x['last_at'],reverse=True)[:30]:
-            ids=sorted(value['people'],key=lambda uid:by_user[uid]['last_at'],reverse=True)[:8]
-            active.append({'scope':value['scope'],'label':scope_label(value['scope']),'messages':value['message_count'],'last_at':value['last_at'],
-                           'people':[{'id':uid,'display_name':(people_rows.get(uid,{}) or {}).get('global_name') or (people_rows.get(uid,{}) or {}).get('account_display') or (people_rows.get(uid,{}) or {}).get('username') or uid} for uid in ids]})
-        dms=sorted((x for x in by_scope.values() if x['scope'].startswith('dm:')),key=lambda x:x['message_count'],reverse=True)
-        public=sorted((x for x in by_scope.values() if x['scope'].startswith('guild:')),key=lambda x:x['message_count'],reverse=True)
-        totals['most_active_dm']=scope_label(dms[0]['scope']) if dms else 'None yet'
-        busiest=max(server_totals,key=server_totals.get) if server_totals else None
-        totals['most_active_server']=self.ux.engine.servers[busiest].get('name',busiest) if busiest else (scope_label(public[0]['scope']) if public else 'None yet')
-        query=request.query.get('search','').strip().casefold()
-        search_rows=[]
-        for uid,data in by_user.items():
-            person=people_rows.get(uid,{})
-            display=person.get('global_name') or person.get('account_display') or person.get('username') or uid
-            username=person.get('username') or ''
-            if query and query not in (display+' '+username+' '+uid).casefold():continue
-            data['display_name']=display;data['username']=username;data['active']=data['last_at']>=cutoff
-            data['sessions']=[{'label':scope_label(s['scope']),'messages':s['message_count'],'active':s['active'],'last_at':s['last_at']} for s in sorted(data['sessions'],key=lambda x:x['last_at'],reverse=True)[:8]]
-            person_key=self.ux.person(uid) if uid.isdigit() else None
-            account=self.ux.bot.get_user(int(uid)) if uid.isdigit() and hasattr(self.ux.bot,'get_user') else None
-            avatar_url=str(account.display_avatar.url) if account else None
-            if avatar_url and not (urlsplit(avatar_url).scheme=='https' and urlsplit(avatar_url).hostname=='cdn.discordapp.com'):avatar_url=None
-            relationship_scopes=set()
-            if person_key:
-                relationship_scopes.update(r['scope'] for r in db.rows('SELECT scope FROM kei_relationships WHERE person=?',(person_key,)))
-                relationship_scopes.update(r['scope'] for r in db.rows('SELECT scope FROM kei_relationship_ranks WHERE person=?',(person_key,)))
-            relations=[]
-            for scope in sorted(relationship_scopes,key=lambda s:by_scope.get(s,{}).get('last_at',0),reverse=True)[:8]:
-                profile=self.ux.engine.memory.relationship(person_key,scope)
-                rank=profile.get('rank') or {}
-                relations.append({'scope':scope_label(scope),'rank':rank.get('label','Neutral'),
-                                  'dimensions':{k:float(profile.get(k,0) or 0) for k in ('familiarity','trust','warmth','playfulness','tension','interaction_frequency','confidence')}})
-            data['avatar_url']=avatar_url;data['relationships']=relations
-            search_rows.append(data)
-        search_rows.sort(key=lambda x:(x['message_count'],x['last_at']),reverse=True)
-        try:offset=max(0,int(request.query.get('offset','0')))
-        except ValueError:offset=0
-        limit=25;page=search_rows[offset:offset+limit]
-        for user in page:user['sessions']=[{**s} for s in user['sessions']]
-        servers=await self._global_live_servers()
-        return web.json_response({'totals':totals,'active_sessions':active,'servers':servers,'users':page,
-                                  'next_offset':offset+limit if offset+limit<len(search_rows) else None})
+        from .overview import overview
+        return web.json_response(await overview(self,request))
+
+    async def global_relationships(self,request):
+        session=await self.session(request)
+        self.require_bot_owner(session)
+        from .overview import relationships
+        return web.json_response(relationships(self,request))
 
     async def profile(self, request):
         session = await self.session(request)

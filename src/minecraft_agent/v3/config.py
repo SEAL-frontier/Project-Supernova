@@ -4,7 +4,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 import yaml
 from dotenv import load_dotenv
-DEFAULTS = {'custom_instructions': '', 'timezone': 'Asia/Ho_Chi_Minh', 'database': 'data/kei.db', 'social': {'triggers': ['kei'], 'ambient': {'enabled': False, 'mode': 'whitelist', 'channels': []}, 'reply_cooldown': 120, 'followup_seconds': 45, 'ambient_interval': 60, 'context_messages': 10, 'dm_daily_limit': 3, 'dm_interval_hours': 4, 'quiet_start': 22, 'quiet_end': 8}, 'memory': {'retention_days': 90, 'cross_context': 'discreet', 'incremental_hours': 6, 'daily_hour': 4, 'recent_turns': 96, 'context_chars': 120000, 'memory_context_chars': 32000}, 'bridge': {'enabled': False, 'host': '0.0.0.0', 'port': 8767}, 'decisions': {'provider': 'off', 'min_confidence': 0.65, 'timeout': 8}, 'servers': [], 'assignments': {}}
+DEFAULTS = {'chat_model': 'ag/gemini-3.8-flash-low', 'agent_model': 'ag/gemini-3.8-flash-high', 'custom_instructions': '', 'timezone': 'Asia/Ho_Chi_Minh', 'database': 'data/kei.db', 'social': {'triggers': ['kei'], 'ambient': {'enabled': False, 'mode': 'whitelist', 'channels': []}, 'reply_cooldown': 120, 'followup_seconds': 90, 'followup_turn_limit': 4, 'relationship_notice_min_delta': 0.006, 'ambient_interval': 60, 'context_messages': 10, 'dm_daily_limit': 3, 'dm_interval_hours': 4, 'quiet_start': 22, 'quiet_end': 8}, 'memory': {'retention_days': 90, 'cross_context': 'discreet', 'incremental_hours': 6, 'daily_hour': 4, 'recent_turns': 96, 'context_chars': 120000, 'memory_context_chars': 32000}, 'bridge': {'enabled': False, 'host': '0.0.0.0', 'port': 8767}, 'decisions': {'provider': 'off', 'min_confidence': 0.65, 'timeout': 8}, 'servers': [], 'assignments': {}}
 
 def merge(base, extra):
     out = copy.deepcopy(base)
@@ -98,6 +98,10 @@ def load_config(path=None, check=True):
     cfg['discord_token'] = secrets.get(cfg.get('discord_token_ref', 'env:DISCORD_BOT_TOKEN'))
     cfg['provider_key'] = secrets.get(cfg.get('provider_key_ref', 'env:PROVIDER_API_KEY'))
     cfg['provider_model'] = cfg.get('provider_model') or os.environ.get('PROVIDER_MODEL', 'ag/gemini-3.8-flash-medium')
+    if 'gemini-3.8' not in cfg['provider_model']:
+        for role in ('chat_model', 'agent_model'):
+            if role not in raw:
+                cfg[role] = cfg['provider_model']
     cfg['servers'] = [normalize_profile(p) for p in cfg['servers']]
     prompt = Path(cfg.get('persona_file', 'data/persona.md'))
     cfg['persona'] = prompt.read_text(encoding='utf-8') if prompt.is_file() else ''

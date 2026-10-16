@@ -1,8 +1,21 @@
 # Changelog
 
-Current public version: **3.2.0-rc.4**. Architecture: **Supernova**.
+Current public version: **3.3.0-rc.1**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.3.0-rc.1 — One person, one relationship
+
+- Unify numeric relationship state, frequency and durable rank across a linked person's DMs, guilds and Minecraft identity. Migrate existing profiles once without adding repeated channel baselines; keep contextual addressing, private excerpts and original evidence scoped. Forgotten contributions cannot reappear through a global aggregate.
+- Rebuild Global Overview around ranked Discord guilds and DMs. Aggregate channels into their guild, show delivery-aware recent DM activity, per-person top guilds and DM counts, and collapsible large sections. Move global relationships into a separate searchable, paginated screen with compact/expanded dimensions.
+- Expand owner settings with separate chat/agent model IDs, configurable trigger/follow-up behavior, memory/reflection limits, quiet hours, proactive caps and relationship-notice sensitivity. Settings persist in this deployment and apply to new work without a restart.
+- Default Gemini 3.8 chat to low and agent/tool work to high. Model selection is request-scoped, so concurrent chat cannot change a worker's model. Non-Gemini configurations retain the chosen provider model unless role models are explicitly set.
+- Preserve the addressed person's follow-up when bystanders interleave. Use a configurable window after actual replies and a bounded candidate count; unrelated users still do not inherit participation. A contextual challenge/correction can receive a natural counter or reaction.
+- Learn model-identified nicknames from repeated retained messages of the actual speaker, across that person's permitted contexts. Nicknames never become universal triggers.
+- Accept raw-newline/fenced social JSON safely in the social parser, increase response/repair budgets, and log safe parser offsets. Operational tool arguments remain strict. Confirmed production failures were JSON parse errors; the rejected payloads were not retained, so the exact malformed bytes are unknown.
+- Let a later substantive exchange confirm an already-proposed stable rank using global history. Default confirmation is six hours; rank notices have a six-hour cooldown. Meaningful social events can update dimensions without inventing a new fact, with source dedupe and bounded credits. Minor/major notices retain the current-label arrow format.
+
+Validation: 284 private regressions and 58 checks against the stripped public source passed, including custom-provider setup round trips. Local owner UI save/pagination/collapse, actual low/high model probes, real read-only connector status, and isolated production-snapshot migration were checked. Production now runs this version with a fresh ready marker, database integrity OK, unchanged protected configuration/persona/secret hashes, no channel-specific rank rows and an existing web session retained through restart. A real-model replay of the reported counter/reconciliation exchange produced replies and a sourced relationship signal in an isolated snapshot; sustained conversation quality and natural rank progression still require real use. Interactive production-owner and mobile browser acceptance remain open. This is a prerelease.
 
 ## 3.2.0-rc.4 — Owner controls and a dashboard that stays signed in
 
@@ -14,6 +27,43 @@ Current public version: **3.2.0-rc.4**. Architecture: **Supernova**.
 - Add endpoint regressions for owner-only global routes, aggregate-only overview data, persistent sessions, token refresh, and the four supported execution modes.
 
 This remains a prerelease. Production is running rc.4 with the SQLite database intact, the startup marker verified, and production config/persona/secret hashes unchanged. Live `/` and `/login` return HTTP 200/302, and an unauthenticated `/api/state` returns 401. Existing rc.3 browser sessions were memory-only, so users may need to sign in once after this upgrade; actual interactive re-login and refresh across a later restart still need browser acceptance.
+
+## 3.2.0-rc.3 — Permissions people can actually understand
+
+- Align approval routing with the picker: Ask for approval asks the task starter before every change; Approve for me asks that person only for changes flagged by deterministic risk checks.
+- Rename the scope selector to Access level and show Sandbox (Minecraft server only), Host (SSH user permissions, no automatic sudo) and Root (full machine control).
+- Replace TOML-only Custom configuration with an interactive permission form: per-tool switches, per-tool decision menus, fallback behavior, file path rules, SSH command blocks and lower-priority guidance. The backend still validates and enforces every rule.
+- Clarify Admin access: it applies to the Admin role and controls server view/operation access; owner and host authority stay separate.
+- Make run-mode, access, role and report pickers compact, expandable and animated, with reduced-motion support.
+
+## 3.2.0-rc.2 — Work until done, keep the owner inbox quiet
+
+- Keep the previous internal policy values behind the updated labels for stored-data compatibility. New saves and action dispatch now apply the rc.3 approval destinations above. Reports never grant authority or imply an approval requirement.
+- Replace the run-mode dropdown with clear selectable cards. Custom now edits and validates tool/path/command rules in the dashboard form, including allow, deny, ask and auto-review. Scope grants remain separate from run modes.
+- Remove overall job time/turn/call-budget cutoffs and the repeated “saved progress; say continue” message. Persist each cycle, retry transient model failures, and report a concrete freeze/blocker instead. Preserve I/O deadlines for hung external calls and uncertain-mutation recovery.
+- Resume the same task for an explicit “continue”. Preserve completed mutation receipts across restarts/compaction and avoid executing an identical completed mutation again.
+- Add bounded server filename search and persisted task-evidence retrieval. Missing source files require an upload/exact path, rather than repeatedly searching unrelated plugin folders. Compact operational noise while retaining receipts, goals and recent turns.
+- Make routine delegated-admin reports opt-in. Keep report history queryable when notifications are off. Show actual current access/run-mode facts to the social router.
+- Relax same-person conversation follow-ups after a real reply. Short acknowledgments can get a cheap reaction, and a legitimate continued conversation no longer fails a random participation gate. Other speakers still break the window; ambient auto-engagement stays off.
+- Switch the entire Web interface to English, including dashboard, setup guidance, permission descriptions and actionable Web API errors. Personal names, memories and user-authored task/report content retain their own language.
+- Fix the Web schedule example “mai 7:00” and preserve existing time when editing only a job. Completed/cancelled schedules stay out of the active list.
+
+rc.1 snapshots were operator deployments used for feedback, not a separate public release. This prerelease includes those changes plus the corrections above; longitudinal social and independent novice acceptance remain open.
+
+## 3.2.0-rc.1 — Less noise, actual controls
+
+- Fix repeated restart/reconcile notices with durable per-task deduplication and grouped delivery. Import old operational results without sending them again.
+- Monitor normal startup/shutdown as lifecycle states; allow ten minutes for boot. Store investigations privately, show Vietnamese summaries, suppress healthy conclusions, and use structured normal/issue/unknown outcomes.
+- Store owner-scoped reports separately from DM preferences. Crash, delegated-administration and recovery notifications can each be disabled in the access UI or through explicit chat requests; saved reports remain retrievable.
+- Replace the access action dropdown with named roles: viewer, moderator, admin and server co-owner. Add self policy editing, scoped co-ownership, atomic changes and a working per-tool Custom policy editor.
+- Show configured connection types in the Minecraft list. Hide finished/cancelled schedules from the active list; pending schedules can be edited/cancelled, and editing only the job preserves its time.
+- Split normal conversational lines into Discord messages while keeping fenced code/structured lists intact. Keep approval text with its button; approval summaries do not dump shell JSON. Remove duplicated progress prefixes and unnecessary DM task references.
+- Split host scope into **Host User** (the connected SSH user, no automatic sudo) and **Full Machine · Root** (verified UID 0, configured sudo/direct-root; optional Linux su fallback). Preserve existing machine grants; isolate identities between concurrent tasks.
+- Fix host inspection failing before execution when an ordinary SSH account cannot enter the Minecraft volume. Read-only inspection may use SSH home; writes require the original or explicitly selected absolute directory.
+- Give the social router current execution policy and adapter capabilities. Configured SSH sudo may use stored credentials; do not claim NOPASSWD is required without checking.
+- Permit bounded meaningful warm exchanges within a session. Accumulate small sourced relationship deltas over thirty minutes for DBH-style current-state arrows; retain anti-spam, cooldown, privacy/forgetting and stable-rank hysteresis.
+
+Still a prerelease: long-term social behavior and independent fresh-user acceptance need real field feedback. Public source excludes private persona, credentials, production memories and local instrumentation.
 
 ## 3.1.0-rc.4 — One more message, when you asked for it
 

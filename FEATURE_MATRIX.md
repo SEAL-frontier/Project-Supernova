@@ -1,13 +1,18 @@
-# Supernova 3.2.0-rc.4 — feature matrix
+# Supernova 3.3.0-rc.1 — feature matrix
 
 Implemented = a code path with evidence. Partial = an important acceptance gap remains. This is a prerelease; transport mocks are not production proof.
 
 | Feature | Status | Code and evidence | Remaining boundary |
 | --- | --- | --- | --- |
-| Four execution modes; no owner Read only option | Implemented | `permissions.py` exposes only Ask for approval, Approve for me, Full access and Custom; old rows migrate to Ask for approval; dashboard/API regressions; rc.4 is live | Existing legacy rows are normalized on first policy read |
-| Durable Discord dashboard login | Implemented | SQLite session records + server-side rotating OAuth refresh tokens; restart/refresh and CSRF integration tests; production `/login` returns OAuth redirect | Existing rc.3 sessions were memory-only, so one sign-in may be needed after upgrade; browser re-login across a later restart remains unverified |
-| Owner Global Overview | Implemented | Owner-only route aggregates user/channel activity and scoped relationship profiles; test confirms raw message text is never returned and non-owner API calls get 403 | Production page requires owner login; server status is bounded and cached |
-| Owner Global settings | Implemented | Owner-only persisted timezone, server-linking and new-grant defaults with validation and API tests | Existing scoped grants remain unchanged |
+| Global per-person relationship and linked-account continuity | Implemented | Global profile/rank migration, cross-context frequency, scoped raw evidence and forgetting regressions; isolated snapshot checked 15 profiles; live deployment has no channel-specific rank rows and database integrity OK | No invented affection/rank changes during migration; field progression remains under observation |
+| Ranked owner overview and separate Global relationships | Implemented | Guild aggregation across channels, ranked DMs, delivery-aware active-DM labels; owner-only API tests; local UI tested with 39 synthetic people | Retained interaction counts are not lifetime totals or Discord online presence |
+| Chat low / agent high, configurable | Implemented | Request-local model views; concurrent transport regression; actual Gemini 3.8 low social response + high native tool call | Custom providers need their own valid model IDs |
+| Natural counters after interleaving | Implemented; field acceptance partial | Same-person bounded follow-up survives bystanders; real-model isolated replay of the reported correction/reconciliation produced replies and a sourced relationship signal | Semantic response quality still depends on the chat model; sustained live acceptance remains open |
+| Personal learned nickname continuity | Implemented | Repeated sourced model-selected aliases; identity/privacy/tombstone checks; retained-owner snapshot supports keys and keys keys | Not a universal trigger; learning requires evidence |
+| Four execution modes; no owner Read only option | Implemented | `permissions.py` exposes only Ask for approval, Approve for me, Full access and Custom; old rows migrate to Ask for approval; dashboard/API regressions; retained in this live version | Existing legacy rows are normalized on first policy read |
+| Durable Discord dashboard login | Implemented | SQLite session records + server-side rotating OAuth refresh tokens; restart/refresh and CSRF tests; an existing production session survived this restart; `/login` redirects to OAuth | Actual browser revisit/refresh acceptance after this deployment remains unverified |
+| Owner Global Overview | Implemented | Owner-only guild/DM rankings and recent DM delivery state; relationship profiles live on a separate page; raw message text is never returned and non-owner API calls get 403 | Retained counts and a recent activity window, not online presence |
+| Owner Global settings | Implemented | Validated persisted role models, social/memory/reflection defaults, server-linking and new-grant settings; local browser save verified | Existing scoped grants remain unchanged |
 | Personal notification controls | Implemented | Users set their own crash, moderator/admin, recovery and relationship notices; reports remain queryable when DMs are muted | Discord delivery is confirmed by outbox, not guaranteed if the recipient blocks the bot |
 | DM, nickname/direct addressing | Implemented | application.py/social.py; actual Discord conversations inspected | Naturalness needs ongoing feedback |
 | Nearby context, reply ancestry, webhooks | Implemented | conversation.py; default 10 messages, three ancestry steps; real multi-user corpus | Requires history permission; no guild-wide collection |
@@ -19,7 +24,7 @@ Implemented = a code path with evidence. Partial = an important acceptance gap r
 | Jev compatibility | Partial | Official System One adapter and schema-contract tests | No live Jev key/probe |
 | 9router token-saver header | Implemented | Chat client sends x-9router-token-saver: off; operator OpenCode provider configured | Existing OpenCode sessions may need config reload |
 | Frequency and relationship dimensions | Implemented | relationships.py; sourced sessions, separate update-credit ledger | Scores are contextual parameters, not measured feelings |
-| Custom stable ranks and private profiles | Implemented | Multi-day thresholds, 24h hysteresis, infrequent -# notices, self-only UI | Starts Neutral; intimacy requires opt-in and evidence; no privilege coupling |
+| Custom stable ranks and private profiles | Implemented | Multi-day evidence, configurable six-hour confirmation, stable-change cooldown, infrequent -# notices, self-only UI | Starts Neutral; intimacy requires opt-in and evidence; no privilege coupling |
 | Episodic memory, reflection, forgetting | Implemented | Source excerpts, origin/resolution, FTS, atomic cursor, tombstones | Multi-day tests pass; multi-week field evidence remains open |
 | Group intelligence | Partial | Observed participants/activity and sourced social observations | Not a complete social graph; no inferred motives as facts |
 | Proactive conversation | Partial | Opt-in, relationship-adaptive caps, actual topics and contact-more/less preferences; bounded gentle followup | Field acceptance pending; unsolicited public participation removed |

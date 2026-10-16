@@ -1,5 +1,8 @@
 # Fill the blank values locally. This file contains no real deployment details.
 provider_base: ""
+# Optional role overrides. Use model IDs available at your provider endpoint.
+chat_model: ag/gemini-3.8-flash-low
+agent_model: ag/gemini-3.8-flash-high
 owner_id: ""
 database: data/kei.db
 persona_file: prompts/persona.md

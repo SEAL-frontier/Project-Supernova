@@ -64,6 +64,16 @@ class Identity:
         target = self.resolve("discord", row["discord"])
         if self.discord(existing) not in (None, row["discord"]):
             raise PermissionError("UUID đã link người khác; unlink trước.")
+        if existing!=target:
+            from .relationships import Relationships
+            relationship=Relationships(self.db,self)
+            profiles=[json.loads(relationship.profile_row(p)['profile']) for p in (target,existing)]
+            base={'familiarity':.1,'trust':.5,'warmth':.5,'playfulness':.5,'tension':0,'confidence':.2}
+            merged={k:max((float(p.get(k,v)) for p in profiles),key=lambda x:abs(x-v)) for k,v in base.items()}
+            self.db.execute('INSERT OR REPLACE INTO kei_relationships VALUES (?,?,?,?)',(target,'global',dumps(merged),time.time()))
+            for table in ('kei_relationships','kei_relationship_ranks','kei_relationship_activity','kei_relationship_credits','kei_relationship_changes','kei_relationship_signals','kei_relationship_delta_events','kei_emotion_credits','kei_social_moods','kei_aliases'):
+                self.db.execute('UPDATE OR IGNORE '+table+' SET person=? WHERE person=?',(target,existing))
+                self.db.execute('DELETE FROM '+table+' WHERE person=?',(existing,))
         self.db.execute(
             "UPDATE kei_accounts SET person=?,verified=1 WHERE platform=? AND account=? AND server=?",
             (target, "minecraft", uuid, server),

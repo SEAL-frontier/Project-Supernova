@@ -14,7 +14,7 @@ class Wizard:
         self.language = language
 
     def ask(self, key, label, default='', secret=False, required=False):
-        english = {'timezone': 'IANA timezone (Vietnam: Asia/Ho_Chi_Minh)', 'discord_token': 'Discord bot token (hidden)', 'provider_base': 'Provider URL (OpenAI-compatible /v1)', 'provider_key': 'Provider API key (hidden)', 'provider_model': 'Model', 'owner_id': 'Discord user ID (leave blank to claim with /setup)', 'persona_file': 'Private persona file', 'persona': 'Describe your persona in one sentence', 'connection': 'Start with (chat/panel/ssh/bridge)', 'kind': 'Connector (panel/ssh/bridge)', 'panel_url': 'Panel URL', 'panel_auth': 'Authentication (key/password/session)', 'panel_key': 'Client API key (not a Wings token)', 'panel_username': 'Panel email/account', 'panel_password': 'Panel password (hidden)', 'session_file': 'Authenticated Playwright storage-state file', 'server_index': 'Choose server number', 'server_id': 'Server ID', 'server_name': 'Server name', 'ssh_host': 'SSH host', 'ssh_port': 'SSH port', 'ssh_user': 'SSH account', 'ssh_auth': 'SSH auth (key/password)', 'ssh_password': 'SSH password (hidden)', 'ssh_key': 'Private key path (inside runtime)', 'ssh_volume': 'Server directory (blank to discover)', 'volume_index': 'Choose directory number', 'minecraft_version': 'Minecraft version', 'trust_host_key': 'Verified fingerprint? (yes/no)', 'bridge_port': 'Bot bridge listening port', 'bridge_url': 'Bot WebSocket URL reachable from Minecraft'}
+        english = {'timezone': 'IANA timezone (Vietnam: Asia/Ho_Chi_Minh)', 'discord_token': 'Discord bot token (hidden)', 'provider_base': 'Provider URL (OpenAI-compatible /v1)', 'provider_key': 'Provider API key (hidden)', 'provider_model': 'Model', 'chat_model': 'Chat model', 'agent_model': 'Agent model', 'owner_id': 'Discord user ID (leave blank to claim with /setup)', 'persona_file': 'Private persona file', 'persona': 'Describe your persona in one sentence', 'connection': 'Start with (chat/panel/ssh/bridge)', 'kind': 'Connector (panel/ssh/bridge)', 'panel_url': 'Panel URL', 'panel_auth': 'Authentication (key/password/session)', 'panel_key': 'Client API key (not a Wings token)', 'panel_username': 'Panel email/account', 'panel_password': 'Panel password (hidden)', 'session_file': 'Authenticated Playwright storage-state file', 'server_index': 'Choose server number', 'server_id': 'Server ID', 'server_name': 'Server name', 'ssh_host': 'SSH host', 'ssh_port': 'SSH port', 'ssh_user': 'SSH account', 'ssh_auth': 'SSH auth (key/password)', 'ssh_password': 'SSH password (hidden)', 'ssh_key': 'Private key path (inside runtime)', 'ssh_volume': 'Server directory (blank to discover)', 'volume_index': 'Choose directory number', 'minecraft_version': 'Minecraft version', 'trust_host_key': 'Verified fingerprint? (yes/no)', 'bridge_port': 'Bot bridge listening port', 'bridge_url': 'Bot WebSocket URL reachable from Minecraft'}
         if self.language == 'en' and key in english:
             label = english[key]
         if key in self.answers:
@@ -68,7 +68,13 @@ def setup(w, path='data/config.yaml', edit=False):
     key = w.ask('provider_key', 'Provider API key (ẩn / hidden)', secret=True, required=not (cfg.get('provider_key') or secret_store.get(cfg.get('provider_key_ref'))))
     if key:
         cfg['provider_key_ref'] = secret_store.put('provider-key', key)
+    previous_model = cfg.get('provider_model')
     cfg['provider_model'] = w.ask('provider_model', 'Model', cfg.get('provider_model', 'ag/gemini-3.8-flash-medium'))
+    for role, label in (('chat_model', 'Model trò chuyện'), ('agent_model', 'Model làm việc')):
+        default = DEFAULTS[role] if 'gemini-3.8' in cfg['provider_model'] else cfg['provider_model']
+        if path.exists() and previous_model == cfg['provider_model']:
+            default = cfg.get(role) or default
+        cfg[role] = w.ask(role, label, default)
     owner = w.ask('owner_id', 'Discord user ID (để trống để claim qua /setup)', cfg.get('owner_id', ''))
     if owner == '0':
         owner = ''

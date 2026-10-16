@@ -65,7 +65,31 @@ Use a reverse proxy with HTTPS for a public deployment. Only the web port needs 
 
 For a local test, set both URLs to `http://127.0.0.1:8768` and `http://127.0.0.1:8768/oauth/callback`. HTTP is accepted only for loopback URLs. The callback must match exactly. There is no arbitrary redirect parameter.
 
-Login requests only Discord **identify** and **guilds**. OAuth tokens and credentials stay server-side. Sessions expire after an hour and after a restart. Writes require a session-bound CSRF token and the configured origin; Discord identity is checked again before writes. A guild administrator role does **not** automatically grant Minecraft access. The dashboard shows only bot-connected guilds the person manages or that map to their explicitly assigned servers.
+Login requests only Discord **identify** and **guilds**. OAuth tokens and credentials stay server-side. Sessions survive service restarts and renew with OAuth refresh tokens; inactive sessions expire after 90 days. Writes require a session-bound CSRF token and the configured origin; Discord identity is checked again before writes. A guild administrator role does **not** automatically grant Minecraft access. The dashboard shows only bot-connected guilds the person manages or that map to their explicitly assigned servers.
+
+### Owner controls
+
+The configured bot owner gets **Global Overview**, **Global relationships** and **Global settings**. A server co-owner does not get these bot-wide pages.
+
+- **Global Overview** ranks Discord guilds (all their channels combined) and DM conversations. It shows recent DM activity, delivery state, joined guilds, Minecraft status, and each person's DM/top-guild interaction counts. Large lists collapse and the people directory loads in pages. Counts describe retained history, not online presence or lifetime statistics.
+- **Global relationships** gives each linked person one numeric relationship and one durable rank across DM, guilds and Minecraft. Use **Show dimensions** for details. Private messages, source excerpts, contextual boundaries and memories keep their privacy rules.
+- **Global settings** controls role models, trigger name, follow-up window/count, context size, relationship notices, memory/reflection, quiet hours and proactive caps. Personal opt-outs and server permissions still apply. Settings persist locally and apply to new turns without restarting.
+
+For Gemini 3.8 on a compatible provider, chat defaults to low and agent/tool work to high. Both can be edited independently in Global settings, or in headless configuration:
+
+```yaml
+chat_model: ag/gemini-3.8-flash-low
+agent_model: ag/gemini-3.8-flash-high
+social:
+  triggers: [kei]
+  followup_seconds: 90
+  followup_turn_limit: 4
+  relationship_notice_min_delta: 0.006
+  rank_confirmation_hours: 6
+  rank_notice_hours: 6
+```
+
+Use model IDs supported by your endpoint. Other providers retain their selected `provider_model` unless you explicitly set role overrides. No provider key is sent to the browser. Saved dashboard overrides take priority over these initial defaults.
 
 OAuth reference: [Discord OAuth2 documentation](https://discord.com/developers/docs/topics/oauth2).
 
@@ -137,7 +161,6 @@ The **People & permissions** screen separates three decisions: a person's server
 | --- | --- |
 | Ask for approval | Ask the person who started the task before every change. |
 | Approve for me | Routine changes proceed; changes the risk rules flag are sent to that same task starter. |
-| Read only | Kei can inspect; every requested change goes to an eligible server owner, or host owner for a host-level action. The task starter cannot approve this request. |
 | Full access | No per-step prompt inside the selected access level. Server assignment, target checks, backups and verification still apply. |
 | Custom rules | Configure tool switches, per-tool behavior, file path allow/deny patterns, blocked SSH command patterns and extra guidance in the dashboard. No TOML editing is required. |
 
@@ -145,7 +168,7 @@ In **Custom rules**, switch each tool on or off, then choose whether Kei asks th
 
 Only a server owner can change another person's access level or run mode. Admin membership permissions and host access are separate. A co-owner can manage this server but does not gain the bot operator account or SSH rights unless an owner separately grants them.
 
-Unsolicited public participation is removed. Old ambient settings are ignored. `kei` is the default configurable trigger; learned aliases only apply to the person who established them. The public followup window is at most two candidates, expires after 45 seconds by default, and closes when another person speaks. A candidate still may be ignored or receive only a reaction. Direct mentions, replies and actual work are stronger signals.
+Unsolicited public participation is removed. Old ambient settings are ignored. `kei` is the default configurable trigger; learned aliases only apply to the person who established them. Follow-ups default to four candidates within 90 seconds of Kei's actual reply. Another speaker does not erase that person's exchange or acquire their eligibility. An explicit reply, mention or name starts a fresh window. The model still distinguishes a direct counter from unrelated chatter and may answer briefly, react, or stay silent when appropriate. Strict context-sharing preferences keep learned aliases within their original context.
 
 For opt-in private conversation, say “nhắn mình nhiều hơn”, “ít lại” or “đừng chủ động nhắn nữa”. Kei records the preference and adjusts future initiative using relationship/context. This is not a fixed-time reminder; use scheduled tasks for exact times. Quiet hours remain a boundary, not a send schedule.
 

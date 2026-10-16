@@ -6,12 +6,18 @@ class Model:
     def __init__(self,base,key,model=None):
         self.model=model or os.environ.get('PROVIDER_MODEL',MODEL)
         self.http=httpx.AsyncClient(base_url=base.rstrip('/')+'/',headers={'Authorization':'Bearer '+key,'x-9router-token-saver':'off'},timeout=90)
-    async def chat(self,messages,tools=None,max_tokens=4096,tool_choice=None):
+    def for_model(self,name):
+        parent=self
+        class View:
+            model=name
+            async def chat(self,*args,**kwargs):return await parent.chat(*args,**kwargs,model=name)
+        return View()
+    async def chat(self,messages,tools=None,max_tokens=4096,tool_choice=None,model=None):
         # Provider adapters may retain only the last system message. Keep persona,
         # identity and later task updates together rather than losing earlier context.
         systems=[m['content'] for m in messages if m['role']=='system']
         if systems:messages=[{'role':'system','content':'\n\n'.join(systems)}]+[m for m in messages if m['role']!='system']
-        body={'model':self.model,'messages':messages,'stream':False,'max_tokens':max_tokens}
+        body={'model':model or self.model,'messages':messages,'stream':False,'max_tokens':max_tokens}
         if tools:body.update(tools=tools,tool_choice=tool_choice or 'auto')
         r=await self.http.post('chat/completions',json=body)
         if r.status_code>=400:
@@ -25,6 +31,7 @@ class Model:
         for private_key in ('reasoning_content','reasoning','analysis'):m.pop(private_key,None)
         for tc in m.get('tool_calls') or []:
             if tc.get('type')!='function':raise ValueError('Unsupported tool call')
+            if tc['function']['name']=='social_turn':continue # Social router owns strict schema/repair.
             args=json.loads(tc['function']['arguments'])
             if not isinstance(args,dict):raise ValueError('Tool args must be object')
         return m

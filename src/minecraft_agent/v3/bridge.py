@@ -73,12 +73,7 @@ class Bridge:
                     "SELECT shareability,visibility FROM kei_social_events WHERE person=? AND scope=? AND kind='nickname' ORDER BY at DESC LIMIT 1",
                     (account["person"], row["scope"]),
                 )
-                if same or (
-                    sharing == "discreet"
-                    and source
-                    and source["shareability"] == "safe"
-                    and source["visibility"] != "restricted"
-                ):
+                if (same or sharing=='discreet') and not self.db.tombstoned(json.loads(row['sources'])):
                     aliases.append(row["alias"])
             if aliases:
                 by_uuid[account["account"]] = list(dict.fromkeys(aliases))[:20]

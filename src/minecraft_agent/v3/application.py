@@ -350,6 +350,14 @@ class Kei(LegacyKei):
         await self.change_presence(activity=discord.Game(name='Kei ' + VERSION + ' · Supernova'))
         LOG.info('KEI_READY version=%s bot_id=%s model=%s servers=%s', VERSION, self.user.id, self.engine.model.model, ','.join(self.engine.servers))
 
+    def mark_exchange(self, channel, actor, message=None):
+        key = (str(channel), str(actor))
+        now = time.time()
+        meta = self.store.one('SELECT addressed FROM kei_event_meta WHERE message=?', (str(message),)) if message else None
+        if self.direct_windows.get(key, 0) <= now or (meta and meta['addressed'] == 1):
+            self.followup_turns[key] = 0
+        self.direct_windows[key] = now + int(self.cfg['social'].get('followup_seconds', 90))
+
     async def on_message(self, message):
         if message.author.bot or message.webhook_id:
             return
@@ -358,7 +366,7 @@ class Kei(LegacyKei):
         guild = message.guild
         scope = 'dm:' + user if guild is None else 'guild:' + str(guild.id) + ':' + channel
         person = self.engine.identity.resolve('discord', user)
-        aliases = self.cfg['social'].get('triggers', ['kei']) + [r['alias'] for r in self.store.rows('SELECT alias FROM kei_aliases WHERE scope=? AND person=?', (scope, person))]
+        aliases = self.cfg['social'].get('triggers', ['kei']) + [r['alias'] for r in self.store.rows("SELECT alias FROM kei_aliases WHERE person=? AND (?='discreet' OR scope=?) AND NOT EXISTS (SELECT 1 FROM json_each(kei_aliases.sources) s JOIN kei_forget_tombstones f ON f.source=s.value)", (person, self.engine.memory.preference(person)['sharing'], scope))]
         named = bool(nickname(message.content, self.cfg['social'].get('triggers', ['kei'])))
         learned = bool(nickname(message.content, [a for a in aliases if a not in self.cfg['social'].get('triggers', ['kei'])]))
         strong = guild is None or self.user in message.mentions or named or message.content.startswith('kei!')
@@ -377,15 +385,12 @@ class Kei(LegacyKei):
         now = time.time()
         previous_speaker = self.channel_speakers.get(channel)
         self.channel_speakers[channel] = user
-        if previous_speaker and previous_speaker != user:
-            for key in list(self.direct_windows):
-                if key[0] == channel:
-                    self.direct_windows.pop(key, None)
         if strong:
-            self.direct_windows[channel, user] = now + self.cfg['social'].get('followup_seconds', 45)
+            self.direct_windows[channel, user] = now + self.cfg['social'].get('followup_seconds', 90)
             self.followup_turns[channel, user] = 0
         last = self.store.one("SELECT content FROM kei_messages WHERE scope=? AND user=? AND role='assistant' AND forgotten=0 ORDER BY at DESC LIMIT 1", (scope, user))
-        recent_exchange = self.followup_turns.get((channel, user), 0) < 2 and self.direct_windows.get((channel, user), 0) > now and (not to_other)
+        turn_limit = int(self.cfg['social'].get('followup_turn_limit', 4))
+        recent_exchange = self.followup_turns.get((channel, user), 0) < turn_limit and self.direct_windows.get((channel, user), 0) > now and (not to_other)
         if not direct and recent_exchange and low_signal(message.content) and (not self.engine.quiet.active(scope, person)):
             if self.store.seen(message.id):
                 return
@@ -393,7 +398,7 @@ class Kei(LegacyKei):
             self.engine.conversation.queue(channel, str(message.id), 'react', '👍' if message.content.casefold().strip(' .!') in ('ok', 'okay', 'oke', 'ừ', 'yes') else '👀', scope, user, 'reply')
             self.followup_turns[channel, user] = self.followup_turns.get((channel, user), 0) + 1
             return
-        following = self.followup_turns.get((channel, user), 0) < 2 and self.direct_windows.get((channel, user), 0) > now and followup_allowed(message.content, to_other=to_other, answering=bool(last and '?' in last['content']))
+        following = self.followup_turns.get((channel, user), 0) < turn_limit and self.direct_windows.get((channel, user), 0) > now and followup_allowed(message.content, to_other=to_other, answering=bool(last and '?' in last['content']))
         if not direct and (not to_other) and (message.content.lower().strip(' .!') in ('ừ', 'ừ làm đi', 'ok', 'okay', 'yes', 'làm đi', 'xác nhận', 'đồng ý')):
             following = following or len(self.store.rows("SELECT id FROM kei_tasks WHERE requester=? AND scope=? AND status='waiting'", (user, scope))) == 1
         if not (direct or following):
@@ -529,10 +534,7 @@ class Kei(LegacyKei):
                         view.add_item(discord.ui.Button(label='Xác nhận bước này', style=discord.ButtonStyle.danger, custom_id='kei-confirm:' + row['confirm_task']))
                     task = self.store.one('SELECT o.* FROM kei_task_outbox m JOIN kei_task_origins o ON o.task=m.task WHERE m.outbox=?', (row['id'],))
                     if task:
-                        actor = task['actor']
-                        self.direct_windows[row['channel'], actor] = time.time() + 75
-                        self.followup_turns[row['channel'], actor] = 0
-                        self.channel_speakers[row['channel']] = actor
+                        self.mark_exchange(row['channel'], task['actor'])
                     if task and task['scope'].startswith('guild:') and (not row['channel'].startswith('mc:')):
                         reference = await self.engine.conversation.reference(channel, task['message'])
                     extra = {'reference': reference} if reference else {}
@@ -562,10 +564,7 @@ class Kei(LegacyKei):
                         if sent and row['kind'] in ('reply', 'short_reply'):
                             recipient = self.store.one('SELECT actor FROM kei_delivery_targets WHERE action=?', (row['id'],))
                             if recipient:
-                                actor = recipient['actor']
-                                self.direct_windows[row['channel'], actor] = time.time() + 75
-                                self.followup_turns[row['channel'], actor] = 0
-                                self.channel_speakers[row['channel']] = actor
+                                self.mark_exchange(row['channel'], recipient['actor'], row['message'])
                         if sent:
                             self.store.execute('INSERT OR REPLACE INTO kei_social_sent VALUES (?,?)', (row['id'], str(sent)))
                             schedules = self.store.rows("SELECT id,owner FROM kei_schedules WHERE status='pending' AND request_message=?", (row['message'],))

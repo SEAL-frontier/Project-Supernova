@@ -65,6 +65,27 @@ class Relationships:
     def __init__(self, store, identity):
         self.db = store
         self.identity = identity
+        self.config = {}
+        with store.atomic():
+            store.execute("INSERT OR IGNORE INTO kei_relationship_credits SELECT person,'global',session,event,at FROM kei_relationship_credits WHERE scope!='global' ORDER BY at")
+            store.execute("DELETE FROM kei_relationship_credits WHERE scope!='global'")
+
+    def profile_row(self, person):
+        """One numeric relationship per linked person; old scoped prose stays private."""
+        row=self.db.one("SELECT * FROM kei_relationships WHERE person=? AND scope='global'",(person,))
+        if row:return row
+        base={'familiarity':.1,'trust':.5,'warmth':.5,'playfulness':.5,'tension':0,'confidence':.2}
+        marker='global-relationship:'+person
+        legacy=[] if self.db.one('SELECT value FROM kei_meta WHERE key=?',(marker,)) else self.db.rows("SELECT * FROM kei_relationships WHERE person=? AND scope!='global' ORDER BY updated DESC",(person,))
+        # Preserve the strongest established deviation; do not sum repeated channel baselines.
+        for key,initial in base.copy().items():
+            values=[float(json.loads(r['profile']).get(key,initial)) for r in legacy]
+            if values:base[key]=max(values,key=lambda value:abs(value-initial))
+        updated=max((r['updated'] for r in legacy),default=time.time())
+        with self.db.atomic():
+            self.db.execute('INSERT OR REPLACE INTO kei_relationships VALUES (?,?,?,?)',(person,'global',dumps(base),updated))
+            self.db.execute('INSERT OR REPLACE INTO kei_meta VALUES (?,?)',(marker,'1'))
+        return self.db.one("SELECT * FROM kei_relationships WHERE person=? AND scope='global'",(person,))
 
     def backfill(self):
         """Index existing sourced events without changing any relationship scores."""
@@ -99,7 +120,7 @@ class Relationships:
         return (
             self.db.execute(
                 "INSERT OR IGNORE INTO kei_relationship_credits VALUES (?,?,?,?,?)",
-                (person, scope, int(observed // 1800), event, observed),
+                (person, 'global', int(observed // 1800), event, observed),
             ).rowcount
             == 1
         )
@@ -124,8 +145,8 @@ class Relationships:
         if kind in ('warm_exchange','milestone') and not any(r['role']=='assistant' for r in rows):return False
         if kind=='warm_exchange' and not any(len(direct_words(r).strip())>=18 for r in own):return False
         now=max(r['at'] for r in own)
-        if self.db.one('SELECT source FROM kei_emotion_credits WHERE person=? AND scope=? AND kind=? AND at>?',(person,scope,kind,now-(900 if kind=='warm_exchange' else 3600))):return False
-        if self.db.one('SELECT count(*) n FROM kei_emotion_credits WHERE person=? AND at>?',(person,now-86400))['n']>=4:return False
+        if self.db.one('SELECT source FROM kei_emotion_credits WHERE person=? AND kind=? AND at>?',(person,kind,now-(300 if kind=='warm_exchange' else 900))):return False
+        if self.db.one('SELECT count(*) n FROM kei_emotion_credits WHERE person=? AND at>?',(person,now-86400))['n']>=12:return False
         # An existing credit for the same human message cannot change kind and count twice.
         if any(self.db.one('SELECT source FROM kei_emotion_credits WHERE person=? AND scope=? AND source=?',(person,scope,r['id'])) for r in own):return False
         for row in own:self.db.execute('INSERT OR IGNORE INTO kei_emotion_credits VALUES (?,?,?,?,?)',(person,scope,row['id'],kind,now))
@@ -161,16 +182,16 @@ class Relationships:
     def frequency(self, person, scope, now=None):
         now = time.time() if now is None else now
         rows = self.db.rows(
-            "SELECT session,max(at) at FROM kei_relationship_activity WHERE person=? AND scope=? AND at<=? AND at>? GROUP BY session",
-            (person, scope, now, now - 30 * 86400),
+            "SELECT session,max(at) at FROM kei_relationship_activity WHERE person=? AND at<=? AND at>? GROUP BY session",
+            (person, now, now - 30 * 86400),
         )
         by_day = {}
         for row in rows:
             day = int(row["at"] // 86400)
             by_day[day] = min(6, by_day.get(day, 0) + 1)
         last = self.db.one(
-            "SELECT max(at) at FROM kei_relationship_activity WHERE person=? AND scope=? AND at<=?",
-            (person, scope, now),
+            "SELECT max(at) at FROM kei_relationship_activity WHERE person=? AND at<=?",
+            (person, now),
         )
         return {
             "active_days_30": len(by_day),
@@ -180,9 +201,16 @@ class Relationships:
         }
 
     def rank(self, person, scope):
+        self.profile_row(person)
         row = self.db.one(
-            "SELECT state FROM kei_relationship_ranks WHERE person=? AND scope=?", (person, scope)
+            "SELECT state FROM kei_relationship_ranks WHERE person=? AND scope='global'", (person,)
         )
+        if not row:
+            candidates=self.db.rows('SELECT state,updated FROM kei_relationship_ranks WHERE person=?',(person,))
+            legacy=max(candidates,key=lambda r:(bool(json.loads(r['state']).get('changed')),json.loads(r['state']).get('changed') or r['updated']),default=None)
+            if legacy:
+                self._save(person,'global',json.loads(legacy['state']),legacy['updated']);row=legacy
+        self.db.execute("DELETE FROM kei_relationship_ranks WHERE person=? AND scope!='global'",(person,))
         return (
             json.loads(row["state"])
             if row
@@ -202,7 +230,7 @@ class Relationships:
             return None
         rows = [
             self.db.one(
-                "SELECT * FROM kei_messages WHERE id=? AND scope=? AND forgotten=0", (s, scope)
+                "SELECT * FROM kei_messages WHERE id=? AND forgotten=0"+('' if scope=='global' else ' AND scope=?'), (s,) if scope=='global' else (s,scope)
             )
             for s in sources
         ]
@@ -235,8 +263,8 @@ class Relationships:
         if rows is None:
             return False
         history = self.db.rows(
-            "SELECT session,max(at) at FROM kei_relationship_activity WHERE person=? AND scope=? AND at<=? GROUP BY session",
-            (person, scope, now),
+            "SELECT session,max(at) at FROM kei_relationship_activity WHERE person=? AND at<=? GROUP BY session",
+            (person, now),
         )
         sessions = len(history)
         days = len({int(r["at"] // 86400) for r in history})
@@ -268,8 +296,8 @@ class Relationships:
             if profile.get("tension", 0) < 0.35 or not any(BOUNDARY.search(s) for s in own):
                 return False
             conflict = self.db.one(
-                "SELECT count(DISTINCT CAST(at/86400 AS INTEGER)) n FROM kei_relationship_activity WHERE person=? AND scope=? AND kind='conflict' AND at>?",
-                (person, scope, now - 30 * 86400),
+                "SELECT count(DISTINCT CAST(at/86400 AS INTEGER)) n FROM kei_relationship_activity WHERE person=? AND kind='conflict' AND at>?",
+                (person, now - 30 * 86400),
             )
             if not conflict or conflict["n"] < 2:
                 return False
@@ -295,14 +323,14 @@ class Relationships:
         # Wording may vary between turns; a rename must not restart the clock.
         label = pending.get('label') or label
         if (
-            now - pending["since"] < 86400
+            now - pending["since"] < float(self.config.get('rank_confirmation_hours',6))*3600
             or not independent
             or (current.get("changed") and now - current["changed"] < 86400)
         ):
             return False
         previous_sources = pending.get("sources", [])
         # Never confirm a candidate after its older evidence was forgotten.
-        if self._evidence(person, scope, previous_sources) is None:
+        if self._evidence(person, 'global', previous_sources) is None:
             current.pop("pending", None)
             self._save(person, scope, current, now)
             return False
@@ -341,8 +369,16 @@ class Relationships:
     def _save(self, person, scope, state, now):
         self.db.execute(
             "INSERT OR REPLACE INTO kei_relationship_ranks VALUES (?,?,?,?)",
-            (person, scope, dumps(state), now),
+            (person, 'global', dumps(state), now),
         )
+
+    def review_pending(self,person,scope,sources,profile,now=None):
+        pending=self.rank(person,scope).get('pending')
+        if not pending:return False
+        rows=self._evidence(person,scope,sources)
+        if not rows or not any(r['role']=='assistant' for r in rows):return False
+        if not any(r['role']=='user' and len(direct_words(r).strip())>=12 for r in rows):return False
+        return self.propose(person,scope,{**pending,'sources':sources},profile,now)
 
     def notification(self, person, scope, now=None):
         """Pull one short self-only notice. Caller marks it after delivery; no channel spam."""
@@ -351,8 +387,8 @@ class Relationships:
             return None
         # Only the latest still-pending change; historical catch-up isn't useful.
         row = self.db.one(
-            "SELECT * FROM kei_relationship_changes WHERE person=? AND scope=? AND notification='pending' AND at>? ORDER BY at DESC LIMIT 1",
-            (person, scope, now - 7 * 86400),
+            "SELECT * FROM kei_relationship_changes WHERE person=? AND notification='pending' AND at>? ORDER BY at DESC LIMIT 1",
+            (person, now - 7 * 86400),
         )
         if not row or self.db.tombstoned(json.loads(row["sources"])):
             return None
@@ -360,7 +396,7 @@ class Relationships:
             "SELECT at FROM kei_relationship_changes WHERE person=? AND notification='sent' ORDER BY at DESC LIMIT 1",
             (person,),
         )
-        if old and now - old["at"] < 3 * 86400:
+        if old and now - old["at"] < float(self.config.get('rank_notice_hours',6))*3600:
             return None
         known_direction = self.db.one(
             "SELECT direction FROM kei_relationship_change_directions WHERE id=?", (row["id"],)
@@ -396,12 +432,12 @@ class Relationships:
         ident=hashlib.sha256((person+scope+dumps(sources)).encode()).hexdigest()[:24]
         if abs(delta)<.000001:return None
         self.db.execute('INSERT OR IGNORE INTO kei_relationship_delta_events VALUES (?,?,?,?,?,?)',(ident,person,scope,delta,dumps(sources),now))
-        last=self.db.one("SELECT max(s.at) at FROM kei_relationship_signals s JOIN kei_social_actions a ON a.id=s.action WHERE s.person=? AND s.scope=? AND a.status IN ('pending','sending','sent','uncertain')",(person,scope))
+        last=self.db.one("SELECT max(s.at) at FROM kei_relationship_signals s JOIN kei_social_actions a ON a.id=s.action WHERE s.person=? AND a.status IN ('pending','sending','sent','uncertain')",(person,))
         through=max(now-1800,(last or {}).get('at') or 0)
-        delta=self.db.one('SELECT coalesce(sum(delta),0) n FROM kei_relationship_delta_events WHERE person=? AND scope=? AND at>?',(person,scope,through))['n']
+        delta=self.db.one('SELECT coalesce(sum(delta),0) n FROM kei_relationship_delta_events WHERE person=? AND at>?',(person,through))['n']
         if abs(delta)<max(.005,float(threshold)):return None
         interval=45 if abs(delta)>=.035 else 180
-        previous=self.db.one("SELECT s.at FROM kei_relationship_signals s JOIN kei_social_actions a ON a.id=s.action WHERE s.person=? AND s.scope=? AND s.at>? AND a.status IN ('pending','sending','sent') ORDER BY s.at DESC LIMIT 1",(person,scope,now-interval))
+        previous=self.db.one("SELECT s.at FROM kei_relationship_signals s JOIN kei_social_actions a ON a.id=s.action WHERE s.person=? AND s.at>? AND a.status IN ('pending','sending','sent') ORDER BY s.at DESC LIMIT 1",(person,now-interval))
         if previous:return None
         ident=hashlib.sha256((person+scope+dumps(sources)).encode()).hexdigest()[:24]
         if self.db.one('SELECT id FROM kei_relationship_signals WHERE id=?',(ident,)):return None
@@ -412,6 +448,9 @@ class Relationships:
         return '-# '+self.rank(person,scope)['label']+' '+arrow
 
     def forget(self, person, scope=None, sources=()):
+        # A forgotten contribution must not survive in a cross-context aggregate.
+        self.db.execute("DELETE FROM kei_relationships WHERE person=? AND scope='global'",(person,))
+        self.db.execute("DELETE FROM kei_relationship_ranks WHERE person=? AND scope='global'",(person,))
         sources = set(sources)
         if scope:self.db.execute('DELETE FROM kei_social_moods WHERE person=? AND scope=?',(person,scope))
         else:self.db.execute('DELETE FROM kei_social_moods WHERE person=?',(person,))

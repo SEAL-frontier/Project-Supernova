@@ -31,8 +31,13 @@ class Memory:
         self.model = model
         self.alias_callback = None
         self.relationships = Relationships(store, identity)
+        self.relationships.config = config.get('social', {})
         with store.atomic():
             self.relationships.backfill()
+            people = {r['person'] for r in store.rows('SELECT person FROM kei_relationships UNION SELECT person FROM kei_relationship_ranks')}
+            for person in people:
+                self.relationships.profile_row(person)
+                self.relationships.rank(person, 'global')
         store.memory_service = self
 
     def preference(self, person):
@@ -55,7 +60,7 @@ class Memory:
 
     def relationship(self, person, scope, now=None):
         now = now or time.time()
-        row = self.db.one('SELECT * FROM kei_relationships WHERE person=? AND scope=?', (person, scope))
+        row = self.relationships.profile_row(person)
         profile = json.loads(row['profile']) if row else {'familiarity': 0.1, 'trust': 0.5, 'warmth': 0.5, 'playfulness': 0.5, 'tension': 0, 'confidence': 0.2}
         if row:
             elapsed = max(0, now - row['updated'])
@@ -65,7 +70,29 @@ class Memory:
         profile['interaction_frequency'] = frequency['score']
         profile['frequency'] = frequency
         profile['rank'] = self.relationships.rank(person, scope)
+        local = self.db.one('SELECT profile FROM kei_relationships WHERE person=? AND scope=?', (person, scope)) if scope != 'global' else None
+        if local:
+            scoped = json.loads(local['profile'])
+            for key in ('addressing', 'boundaries', 'interests', 'public_hint'):
+                if key in scoped:
+                    profile[key] = scoped[key]
         return profile
+
+    def learn_alias(self, person, scope, alias, sources):
+        alias = str(alias or '').casefold().strip()
+        if not re.fullmatch('[^\\W\\d_][\\w -]{1,30}', alias, re.UNICODE) or alias == 'kei':
+            return False
+        pattern = re.compile('(?<![\\w-])' + re.escape(alias) + '(?![\\w-])', re.I)
+        evidence = []
+        for row in self.db.rows("SELECT id,user,content FROM kei_messages WHERE role='user' AND forgotten=0 ORDER BY at DESC LIMIT 3000"):
+            if self.identity.person_for_user(row['user']) == person and pattern.search(direct_words(row)) and (not self.db.tombstoned([row['id']])):
+                evidence.append(row['id'])
+        if len(evidence) < 2 or not set(map(str, sources)) & set(evidence):
+            return False
+        self.db.execute('INSERT OR REPLACE INTO kei_aliases VALUES (?,?,?,?)', (alias, person, scope, dumps(evidence[:8])))
+        if self.alias_callback:
+            self.alias_callback()
+        return True
 
     def record(self, person, scope, proposal, sources):
         with self.db.atomic():
@@ -164,7 +191,10 @@ class Memory:
                 continue
             if isinstance(value, str) and value.strip():
                 profile[key] = value[:400]
-        self.db.execute('INSERT OR REPLACE INTO kei_relationships VALUES (?,?,?,?)', (person, scope, dumps(profile), now))
+        self.db.execute('INSERT OR REPLACE INTO kei_relationships VALUES (?,?,?,?)', (person, 'global', dumps({k: profile[k] for k in (*DIMS, 'confidence') if k in profile}), now))
+        scoped = {key: profile[key] for key in ('addressing', 'boundaries', 'interests', 'public_hint') if key in profile}
+        if scoped:
+            self.db.execute('INSERT OR REPLACE INTO kei_relationships VALUES (?,?,?,?)', (person, scope, dumps(scoped), now))
         rank = proposal.get('relationship_rank')
         if isinstance(rank, dict):
             rank = {**rank, 'sources': rank.get('sources') or sources}
@@ -198,9 +228,9 @@ class Memory:
                 episodes.append({'id': row['id'], 'title': row['title'], 'summary': unpack(row['summary'])['text'], 'at': row['at']})
             if len(episodes) >= 12:
                 break
-        changes = self.db.rows('SELECT old_label,label,reason,at FROM kei_relationship_changes WHERE person=? AND scope=? ORDER BY at DESC LIMIT 8', (person, scope))
-        aliases = [r['alias'] for r in self.db.rows('SELECT alias,sources FROM kei_aliases WHERE person=? AND scope=?', (person, scope)) if not self.db.tombstoned(json.loads(r['sources']))]
-        return {'person': person, 'scope': scope, 'rank': {k: v for k, v in rel['rank'].items() if k != 'pending'}, 'rank_progress': {'pending_label': rel['rank'].get('pending', {}).get('label'), 'earliest_confirmation': rel['rank'].get('pending', {}).get('since', 0) + 86400 if rel['rank'].get('pending') else None}, 'mood': self.relationships.mood(person, scope), 'signals': [{k: r[k] for k in ('direction', 'dimension', 'delta', 'at')} for r in self.db.rows('SELECT * FROM kei_relationship_signals WHERE person=? AND scope=? ORDER BY at DESC LIMIT 8', (person, scope)) if not self.db.tombstoned(json.loads(r['sources']))], 'dimensions': {k: rel.get(k, 0) for k in (*DIMS, 'confidence', 'interaction_frequency')}, 'frequency': rel['frequency'], 'memories': episodes, 'changes': changes, 'preferences': self.preference(person), 'aliases': aliases, 'addressing': rel.get('addressing', ''), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', '')}
+        changes = self.db.rows('SELECT old_label,label,reason,at FROM kei_relationship_changes WHERE person=? ORDER BY at DESC LIMIT 8', (person,))
+        aliases = [r['alias'] for r in self.db.rows('SELECT alias,sources FROM kei_aliases WHERE person=?', (person,)) if not self.db.tombstoned(json.loads(r['sources']))]
+        return {'person': person, 'scope': scope, 'rank': {k: v for k, v in rel['rank'].items() if k not in ('pending', 'sources') and (private(scope) or k != 'reason')}, 'rank_progress': {'pending_label': rel['rank'].get('pending', {}).get('label'), 'earliest_confirmation': rel['rank'].get('pending', {}).get('since', 0) + float(self.cfg.get('social', {}).get('rank_confirmation_hours', 6)) * 3600 if rel['rank'].get('pending') else None}, 'mood': self.relationships.mood(person, scope), 'signals': [{k: r[k] for k in ('direction', 'dimension', 'delta', 'at')} for r in self.db.rows('SELECT * FROM kei_relationship_signals WHERE person=? AND scope=? ORDER BY at DESC LIMIT 8', (person, scope)) if not self.db.tombstoned(json.loads(r['sources']))], 'dimensions': {k: rel.get(k, 0) for k in (*DIMS, 'confidence', 'interaction_frequency')}, 'frequency': rel['frequency'], 'memories': episodes, 'changes': changes, 'preferences': self.preference(person), 'aliases': aliases, 'addressing': rel.get('addressing', ''), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', '')}
 
     def episodes_page(self, user, offset=0, limit=12, query=''):
         person = self.identity.person_for_user(str(user))
@@ -280,7 +310,7 @@ class Memory:
         rel = self.relationship(person, scope)
         warmth = rel.get('warmth', 0.5)
         tension = rel.get('tension', 0)
-        description = {'rank': {k: v for k, v in rel['rank'].items() if k != 'pending'}, 'interaction_frequency': rel['frequency'], 'familiarity': 'familiar' if rel['familiarity'] >= 0.35 else 'shared history present; judge familiarity from the episodes' if episodes else 'getting acquainted', 'tone': 'warm' if warmth > 0.6 else 'contextual', 'tension': 'recent friction; do not force appeasement' if tension > 0.15 else 'no established conflict', 'addressing': rel.get('addressing', 'follow actual conversation, never invent relationships'), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', ''), 'continuity': 'Use the actual shared episodes below; low calibration scores do not negate shared history. Playful sulking is character banter, not evidence of genuine hostility.'}
+        description = {'rank': {k: v for k, v in rel['rank'].items() if k not in ('pending', 'sources') and (private(scope) or k != 'reason')}, 'interaction_frequency': rel['frequency'], 'familiarity': 'familiar' if rel['familiarity'] >= 0.35 else 'shared history present; judge familiarity from the episodes' if episodes else 'getting acquainted', 'tone': 'warm' if warmth > 0.6 else 'contextual', 'tension': 'recent friction; do not force appeasement' if tension > 0.15 else 'no established conflict', 'addressing': rel.get('addressing', 'follow actual conversation, never invent relationships'), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', ''), 'continuity': 'Use the actual shared episodes below; low calibration scores do not negate shared history. Playful sulking is character banter, not evidence of genuine hostility.'}
         commitments = self.db.rows("SELECT id,content,due FROM kei_commitments WHERE person=? AND scope=? AND status='open' LIMIT 5", (person, scope))
         payload = {'relationship': description, 'memories': items[:12], 'episodes': episodes, 'commitments': commitments, 'group': self.relationships.group(scope, through)}
         budget = self.cfg['memory'].get('memory_context_chars', 32000)
