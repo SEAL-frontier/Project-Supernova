@@ -225,7 +225,7 @@ class Engine:
                     current=self.db.one('SELECT * FROM kei_tasks WHERE id=?',(k,))
                     if current['status'] in ('cancelled','paused'):return
                     if current['goal']!=prior_goal:
-                        history.append({'role':'user','content':'Requester updated goal: '+current['goal']});prior_goal=current['goal']
+                        history.append({'role':'user','content':'Requester updated goal: '+current['goal']});prior_goal=current['goal'];watchdog.set_goal(prior_goal)
                     turn+=1
                     history=self.prepare_task_history(k,history)
                     self.progress.phase(k,'Đang chọn bước tiếp theo theo kết quả vừa đọc')
@@ -243,7 +243,7 @@ class Engine:
                     if latest['status'] in ('cancelled','paused'):return
                     if latest['goal']!=prior_goal:
                         history.append({'role':'user','content':'Requester changed instructions while you were thinking. Discard your previous action proposal. Current goal: '+latest['goal']})
-                        prior_goal=latest['goal'];continue
+                        prior_goal=latest['goal'];watchdog.set_goal(prior_goal);continue
                     tcalls=response.get('tool_calls') or []
                     if not tcalls:
                         # A conversational conclusion is not an execution completion certificate.
@@ -254,7 +254,7 @@ class Engine:
                     status_only_turns=status_only_turns+1 if all(c['function']['name'] in ('update_plan','update_progress') for c in tcalls) else 0
                     if status_only_turns:
                         if status_only_since is None:status_only_since=time.monotonic()
-                        if status_only_turns>=8 and time.monotonic()-status_only_since>=180:raise AgentFrozen('Model chỉ cập nhật checklist liên tiếp hơn 3 phút, không đưa ra bước thực thi hay kiểm chứng.')
+                        if status_only_turns>=8:raise AgentFrozen('Model chỉ cập nhật checklist 8 lượt liên tiếp, không đưa ra bước thực thi hay kiểm chứng.')
                     else:status_only_since=None
                     history.append(response)
                     for index,call in enumerate(tcalls):
@@ -295,10 +295,10 @@ class Engine:
                             try:
                                 if task['mode']=='observe' and effect_of(name,args)!='read':
                                     result={'error':'This is observation only; do not mutate or ask for routine repair approval. Report findings or request explicit repair.'}
-                                    history.append({'role':'tool','tool_call_id':call['id'],'content':dumps(result)});continue
-                                if await self.approval_required(k,name,args):raise DangerousAction('Requires requester confirmation')
-                                if effect_of(name,args)!='read':mutated=True
-                                result=await self.action(k,name,args,executor,task['mode'])
+                                else:
+                                    if await self.approval_required(k,name,args):raise DangerousAction('Requires requester confirmation')
+                                    if effect_of(name,args)!='read':mutated=True
+                                    result=await self.action(k,name,args,executor,task['mode'])
                             except DangerousAction:
                                 # Resolve the other parallel calls as skipped; preserve only this exact step for confirmation.
                                 for remaining in tcalls[index+1:]:history.append({'role':'tool','tool_call_id':remaining['id'],'content':dumps({'skipped':'Waiting for dangerous step confirmation'})})

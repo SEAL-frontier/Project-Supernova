@@ -1,8 +1,18 @@
 # Changelog
 
-Current public version: **3.4.0-rc.2**. Architecture: **Supernova**.
+Current public version: **3.4.0-rc.3**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.4.0-rc.3 — Check the right thing, stop the other loop paths
+
+- Re-audit live tasks after the previous fix: the interrupted job remains paused with unchanged receipts; a newer four-action diagnostic completed normally. Do not resume old paused jobs automatically.
+- Extend durable no-progress detection to console reads, verification wrappers, saved-evidence requests and rejected mutations. Changing line limits, equivalent paths, embedded observation timestamps or the wording of a postcondition no longer disguises identical evidence. An observation-only task that keeps attempting changes is stopped before dispatch.
+- Distinct verified mutations establish progress once; cycling no-op mutations or cached receipts cannot repeatedly reset the read-loop guard. Config jobs treat ordinary heap/TPS jitter as the same server-state evidence. Explicit sampling and workflows that keep obtaining new evidence remain supported without an overall time or tool budget.
+- Stop checklist-only model loops after eight consecutive turns without execution. This is an execution-stagnation condition, not a deadline on useful work.
+- Fix a confirmed invalid reload certificate: running state/TPS cannot prove a plugin config reload, and an explicitly unaccepted console command cannot be certified by an unrelated health check. The verifier sees the actual task goal. Older invalid certificates no longer satisfy completion checks when a task is resumed; historical completed records are preserved.
+
+Validation: 318 private and 68 stripped-public regression checks; replay of 12 real task histories (468 recorded actions) still catches the original runaway at call 24 and now detects repeated running-state checks in the configuration job. Isolated validation on the deployment host checks real saved receipts and read-only connector output. No Minecraft restart or mutation was performed for this audit. Relationship policy and private persona are unchanged.
 
 ## 3.4.0-rc.2 — Stop investigating the same evidence forever
 

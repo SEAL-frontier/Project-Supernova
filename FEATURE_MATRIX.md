@@ -1,4 +1,13 @@
-# Supernova 3.4.0-rc.2 — feature matrix
+# Supernova 3.4.0-rc.3 — feature matrix
+
+## 3.4.0-rc.3 task execution follow-up
+
+- **Implemented, regression-tested:** repeated console/verification/rejected-action guards, canonical evidence comparison, no-op mutation cycles, live goal updates and checklist-only stagnation detection. Explicit monitoring and 30 distinct successful reads complete without a total turn/time limit.
+- **Confirmed from real receipts:** a config reload was incorrectly certified using generic server health despite an explicit `accepted: false`. Deterministic validation now rejects that certificate before model judgment or dispatch and during completion checks. Completed historical records are not rewritten.
+- **Live audit:** zero running/queued tasks at inspection; the previously interrupted task stayed paused at 173 actions. The newest diagnostic completed in 53 seconds with four real reads. Old paused/reconcile records are not currently executing.
+- **Evidence:** 318 private and 68 stripped-public tests, a 12-task/468-action retained-incident replay, isolated host validation and post-deploy readiness/action-count checks. These do not establish that every future model strategy can never stall.
+- **Still blocked:** original plugin runtime enablement/config application needs plugin-error repair and an authorized clean restart. No Minecraft restart was performed for this release.
+
 
 ## Agent-loop hotfix evidence
 
