@@ -492,27 +492,12 @@ class Kei(LegacyKei):
             try:
                 await self.engine.social_maintenance()
                 await self.engine.proactive()
-                await self.rank_notifications()
             except Exception as exc:
                 LOG.warning('Social background deferred (%s)', type(exc).__name__)
             await asyncio.sleep(300)
 
     async def rank_notifications(self):
-        self.store.execute('CREATE TABLE IF NOT EXISTS kei_rank_deliveries(notice TEXT PRIMARY KEY,outbox TEXT)')
-        for row in self.store.rows('SELECT DISTINCT person,scope FROM kei_relationship_ranks'):
-            notice = self.engine.memory.relationships.notification(row['person'], row['scope'])
-            if not notice:
-                continue
-            queued = self.store.one('SELECT o.status FROM kei_rank_deliveries r JOIN kei_outbox o ON o.id=r.outbox WHERE r.notice=?', (notice['id'],))
-            if queued:
-                if queued['status'] == 'sent':
-                    self.engine.memory.relationships.delivered(notice['id'])
-                continue
-            user = self.engine.identity.discord(row['person'])
-            if user:
-                ids = self.store.queue(user, notice['content'])
-                if ids:
-                    self.store.execute('INSERT INTO kei_rank_deliveries VALUES (?,?)', (notice['id'], ids[0]))
+        return
 
     async def outbox_loop(self):
         await self.wait_until_ready()
@@ -578,6 +563,8 @@ class Kei(LegacyKei):
                     else:
                         await channel.send(row['content'], allowed_mentions=discord.AllowedMentions.none())
                     self.store.execute("UPDATE kei_social_actions SET status='sent' WHERE id=?", (row['id'],))
+                    for notice in self.store.rows('SELECT notice FROM kei_rank_actions WHERE action=?', (row['id'],)):
+                        self.engine.memory.relationships.delivered(notice['notice'])
                 except (discord.Forbidden, discord.NotFound):
                     self.store.execute("UPDATE kei_social_actions SET status='failed' WHERE id=?", (row['id'],))
                 except Exception as exc:

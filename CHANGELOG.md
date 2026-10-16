@@ -1,8 +1,20 @@
 # Changelog
 
-Current public version: **3.3.0-rc.1**. Architecture: **Supernova**.
+Current public version: **3.4.0-rc.1**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.4.0-rc.1 — A mood that carries into the next conversation
+
+- Add persistent daily character disposition and sourced, decaying personal mood. Feed both into actual chat context while preserving the configured core persona. Warmth can be sincere; playful sulking remains contextual at any rank. Daily variation never invents offscreen experiences or changes server rights.
+- Keep friendship/trust rank separate from transient mood and romantic connection. A sourced one-sided Crush can develop organically; Lover needs explicit human romantic interest and meaningful history, without a fourteen-day ladder. Breakup/stop-flirting is respected and blocks unsolicited rekindling. Personal platonic/invited-only/organic controls are available in chat, Discord and Web settings.
+- Fix the confirmed delayed Warm notification: rank changes bind to the current relevant answer, use double arrows, and are acknowledged after delivery. Remove the five-minute background standalone rank DMs. Small sourced point changes can retain the current rank with a single arrow; significant deltas use two.
+- Relax negative-rank evidence away from literal stop keywords and two-calendar-day conflict requirements. Require sourced repeated conflict/loss of trust, independent confirmation and stable-change cooldowns. Major conflict/reconciliation/milestone events may apply proportionate larger steps; ordinary teasing stays minor.
+- Expand typed OpenAI Decisions / Jev judgments to eligible short/direct acknowledgments, personal nickname and follow-up participation, proposed rank/bond transitions and opted-in initiative. Full conversational requests keep the direct generator path. Uncertain/refused/failed decisions fall back; all permission checks remain deterministic.
+- Add configurable, durable one-turn social work holds for nonurgent directly assigned jobs. A natural please/do it/force resumes the original scoped job with permission revalidation. Emergencies, forced/repeated requests and scheduled workflows cannot be stalled this way. A thumbs-up acknowledgment can launch real work without a conversational paragraph.
+- Add global mood/bond/work-sulk controls and personal romance preferences. New relationship profiles explain uncalibrated defaults instead of displaying neutral priors as established judgments. Preserve original profiles, private persona, scoped excerpts and forgetting boundaries.
+
+Validation: 296 private and 70 stripped-public regression checks, local browser controls, isolated production-snapshot migration, actual OpenAI Decisions + existing chat model replay, and live deployment with authenticated owner refresh/session persistence; detailed evidence is recorded in FEATURE_MATRIX.md. This remains a prerelease: simulated cycles and API-backed replay do not establish sustained live social quality.
 
 ## 3.3.0-rc.1 — One person, one relationship
 

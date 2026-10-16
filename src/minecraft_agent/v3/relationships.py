@@ -29,6 +29,7 @@ def install(store):
     CREATE TABLE IF NOT EXISTS kei_relationship_delta_events(id TEXT PRIMARY KEY,person TEXT,scope TEXT,delta REAL,sources TEXT,at REAL);
     CREATE TABLE IF NOT EXISTS kei_emotion_credits(person TEXT,scope TEXT,source TEXT,kind TEXT,at REAL,PRIMARY KEY(person,scope,source));
     CREATE TABLE IF NOT EXISTS kei_relationship_change_directions(id TEXT PRIMARY KEY,direction TEXT);
+    CREATE TABLE IF NOT EXISTS kei_rank_actions(notice TEXT PRIMARY KEY,action TEXT);
     CREATE TABLE IF NOT EXISTS kei_group_observations(
       id TEXT PRIMARY KEY,scope TEXT,kind TEXT,content TEXT,people TEXT,sources TEXT,at REAL);
     CREATE INDEX IF NOT EXISTS kei_group_observed ON kei_group_observations(scope,at);
@@ -69,6 +70,9 @@ class Relationships:
         with store.atomic():
             store.execute("INSERT OR IGNORE INTO kei_relationship_credits SELECT person,'global',session,event,at FROM kei_relationship_credits WHERE scope!='global' ORDER BY at")
             store.execute("DELETE FROM kei_relationship_credits WHERE scope!='global'")
+            if store.one("SELECT name FROM sqlite_master WHERE type='table' AND name='kei_rank_deliveries'"):
+                store.execute("UPDATE kei_relationship_changes SET notification='sent' WHERE id IN (SELECT r.notice FROM kei_rank_deliveries r JOIN kei_outbox o ON o.id=r.outbox WHERE o.status='sent')")
+                store.execute("UPDATE kei_outbox SET status='cancelled' WHERE status='pending' AND id IN (SELECT outbox FROM kei_rank_deliveries)")
 
     def profile_row(self, person):
         """One numeric relationship per linked person; old scoped prose stays private."""
@@ -132,6 +136,7 @@ class Relationships:
         return {
             "rank_notifications": True,
             "romantic_opt_in": False,
+            "romance_mode": "organic",
             **(json.loads(row["settings"]) if row else {}),
         }
 
@@ -153,10 +158,12 @@ class Relationships:
         return True
 
     def set_preferences(self, person, **values):
-        if not set(values) <= {"rank_notifications", "romantic_opt_in"}:
+        if 'romantic_opt_in' in values and 'romance_mode' not in values:values['romance_mode']='mutual' if values['romantic_opt_in'] else 'off'
+        if not set(values) <= {"rank_notifications", "romantic_opt_in", "romance_mode"}:
             raise ValueError("Unknown relationship preference")
-        if not all(isinstance(v, bool) for v in values.values()):
+        if not all(isinstance(v, bool) for k,v in values.items() if k!='romance_mode'):
             raise ValueError("Relationship preferences must be boolean")
+        if 'romance_mode' in values and values['romance_mode'] not in ('off','organic','mutual'):raise ValueError('Invalid romance preference')
         self.db.execute(
             "INSERT OR REPLACE INTO kei_relationship_preferences VALUES (?,?)",
             (person, dumps({**self.preferences(person), **values})),
@@ -293,10 +300,10 @@ class Relationships:
                 return False
         if stage < 0:
             # Character banter or assistant demands are not evidence that the user is hostile.
-            if profile.get("tension", 0) < 0.35 or not any(BOUNDARY.search(s) for s in own):
+            if profile.get("tension", 0) < 0.15 and profile.get('trust',.5) >= .4:
                 return False
             conflict = self.db.one(
-                "SELECT count(DISTINCT CAST(at/86400 AS INTEGER)) n FROM kei_relationship_activity WHERE person=? AND kind='conflict' AND at>?",
+                "SELECT count(DISTINCT event) n FROM kei_relationship_activity WHERE person=? AND kind='conflict' AND at>?",
                 (person, now - 30 * 86400),
             )
             if not conflict or conflict["n"] < 2:
@@ -305,9 +312,9 @@ class Relationships:
         if current["label"] == label and current["category"] == category:
             return False
         old_stage = RANKS.get(current["category"], RANKS["neutral"])[1]
-        if abs(stage - old_stage) > 1:
+        if abs(stage - old_stage) > 1 and not (stage < 0 and stage < old_stage):
             return False
-        # A new independent session and a full day must confirm a proposed change.
+        # Sourced independent evidence confirms a candidate after the configured window.
         pending = current.get("pending", {})
         independent = set(sources) - set(pending.get("sources", []))
         if pending.get("category") != category:
@@ -408,7 +415,16 @@ class Relationships:
             else ("Down" if RANKS.get(row["category"], RANKS["neutral"])[1] < old_stage else "Up")
         )
         arrow = '↓' if direction == 'Down' else '↑'
-        return {"id": row["id"], "content": f"-# {row['label']} {arrow}"}
+        return {"id": row["id"], "content": f"-# {row['label']} {arrow*2}"}
+
+    def attach_notice(self,person,scope,action,now=None):
+        """Bind rank delivery to this person's current answer; never send a stray DM."""
+        notice=self.notification(person,scope,now)
+        if not notice:return None
+        existing=self.db.one('SELECT a.status FROM kei_rank_actions r JOIN kei_social_actions a ON a.id=r.action WHERE r.notice=?',(notice['id'],))
+        if existing and existing['status'] in ('pending','sending','sent','uncertain'):return None
+        self.db.execute('INSERT OR REPLACE INTO kei_rank_actions VALUES (?,?)',(notice['id'],action))
+        return notice['content']
 
     def delivered(self, notification_id):
         self.db.execute(

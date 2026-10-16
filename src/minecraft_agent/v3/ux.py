@@ -395,6 +395,7 @@ class UserExperience:
             "default_server",
             "rank_notifications",
             "romantic_opt_in",
+            "romance_mode",
             "custom_instructions",
         }
         if not isinstance(values, dict) or not set(values) <= allowed:
@@ -405,6 +406,7 @@ class UserExperience:
         for key in ("dm_opt_in", "muted", "rank_notifications", "romantic_opt_in"):
             if key in pref and type(pref[key]) is not bool:
                 raise ValueError(key + " cần true hoặc false.")
+        if "romance_mode" in pref and pref["romance_mode"] not in ("off","organic","mutual"):raise ValueError("Choose off, organic or mutual.")
         if "persona" in values and values["persona"] not in persona.MODES:
             raise ValueError("Chọn auto, soft hoặc spicy.")
         if "debug" in values and values["debug"] not in ("off", "minimal", "advanced"):
@@ -1045,6 +1047,7 @@ class SettingsView(discord.ui.View):
             self.button("Múi giờ", lambda i: i.response.send_modal(TimezoneModal(ux, user)))
 
         elif page == "privacy":
+            self.choice('Tình cảm trong nhân vật', 'romance_mode', [('organic','Để tự nhiên · crush một phía'),('mutual','Chỉ khi mình chủ động mời'),('off','Chỉ làm bạn')])
             self.choice(
                 "Dùng memory giữa các ngữ cảnh",
                 "sharing",

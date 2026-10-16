@@ -32,6 +32,8 @@ class Memory:
         self.alias_callback = None
         self.relationships = Relationships(store, identity)
         self.relationships.config = config.get('social', {})
+        from .affect import Affect
+        self.affect = Affect(store, self.relationships, config)
         with store.atomic():
             self.relationships.backfill()
             people = {r['person'] for r in store.rows('SELECT person FROM kei_relationships UNION SELECT person FROM kei_relationship_ranks')}
@@ -45,7 +47,7 @@ class Memory:
         return {**(row or {'person': person, 'dm_opt_in': 0, 'timezone': self.cfg['timezone'], 'sharing': self.cfg['memory']['cross_context'], 'muted': 0}), **self.relationships.preferences(person)}
 
     def set_preference(self, person, **values):
-        extras = {k: values.pop(k) for k in ('rank_notifications', 'romantic_opt_in') if k in values}
+        extras = {k: values.pop(k) for k in ('rank_notifications', 'romantic_opt_in', 'romance_mode') if k in values}
         allowed = {'dm_opt_in', 'timezone', 'sharing', 'muted'}
         if not set(values) <= allowed:
             raise ValueError('Unknown social preference')
@@ -176,11 +178,12 @@ class Memory:
         if meaningful <= 5 and new_session:
             profile['familiarity'] = min(1, profile['familiarity'] + 0.01)
         delta = proposal.get('dimensions', {})
+        step = 0.035 if proposal.get('impact') == 'major' and kind in ('conflict', 'reconciliation', 'milestone') else 0.015
         if isinstance(delta, dict):
             for d in DIMS:
                 direction = delta.get(d, 0)
                 if isinstance(direction, (int, float)) and (new_session or emotional) and (meaningful <= 5 or d == 'tension' or emotional):
-                    profile[d] = max(0, min(1, float(profile.get(d, 0.5)) + max(-1, min(1, direction)) * 0.015))
+                    profile[d] = max(0, min(1, float(profile.get(d, 0.5)) + max(-1, min(1, direction)) * step))
         if kind == 'reconciliation' and (new_session or emotional):
             profile['tension'] = max(0, profile['tension'] - 0.1)
         if new_session:
@@ -230,7 +233,7 @@ class Memory:
                 break
         changes = self.db.rows('SELECT old_label,label,reason,at FROM kei_relationship_changes WHERE person=? ORDER BY at DESC LIMIT 8', (person,))
         aliases = [r['alias'] for r in self.db.rows('SELECT alias,sources FROM kei_aliases WHERE person=?', (person,)) if not self.db.tombstoned(json.loads(r['sources']))]
-        return {'person': person, 'scope': scope, 'rank': {k: v for k, v in rel['rank'].items() if k not in ('pending', 'sources') and (private(scope) or k != 'reason')}, 'rank_progress': {'pending_label': rel['rank'].get('pending', {}).get('label'), 'earliest_confirmation': rel['rank'].get('pending', {}).get('since', 0) + float(self.cfg.get('social', {}).get('rank_confirmation_hours', 6)) * 3600 if rel['rank'].get('pending') else None}, 'mood': self.relationships.mood(person, scope), 'signals': [{k: r[k] for k in ('direction', 'dimension', 'delta', 'at')} for r in self.db.rows('SELECT * FROM kei_relationship_signals WHERE person=? AND scope=? ORDER BY at DESC LIMIT 8', (person, scope)) if not self.db.tombstoned(json.loads(r['sources']))], 'dimensions': {k: rel.get(k, 0) for k in (*DIMS, 'confidence', 'interaction_frequency')}, 'frequency': rel['frequency'], 'memories': episodes, 'changes': changes, 'preferences': self.preference(person), 'aliases': aliases, 'addressing': rel.get('addressing', ''), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', '')}
+        return {'person': person, 'scope': scope, 'rank': {k: v for k, v in rel['rank'].items() if k not in ('pending', 'sources') and (private(scope) or k != 'reason')}, 'rank_progress': {'pending_label': rel['rank'].get('pending', {}).get('label'), 'earliest_confirmation': rel['rank'].get('pending', {}).get('since', 0) + float(self.cfg.get('social', {}).get('rank_confirmation_hours', 6)) * 3600 if rel['rank'].get('pending') else None}, 'mood': {'tone': self.affect.state(person, scope)['recent_tone']}, 'affect': self.affect.context(person, scope), 'bond': {k: v for k, v in self.affect.bond(person, scope).items() if k not in ('sources',)}, 'calibrated': rel['frequency']['meaningful_sessions_30'] >= 3, 'signals': [{k: r[k] for k in ('direction', 'dimension', 'delta', 'at')} for r in self.db.rows('SELECT * FROM kei_relationship_signals WHERE person=? AND scope=? ORDER BY at DESC LIMIT 8', (person, scope)) if not self.db.tombstoned(json.loads(r['sources']))], 'dimensions': {k: rel.get(k, 0) for k in (*DIMS, 'confidence', 'interaction_frequency')}, 'frequency': rel['frequency'], 'memories': episodes, 'changes': changes, 'preferences': self.preference(person), 'aliases': aliases, 'addressing': rel.get('addressing', ''), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', '')}
 
     def episodes_page(self, user, offset=0, limit=12, query=''):
         person = self.identity.person_for_user(str(user))
@@ -312,7 +315,7 @@ class Memory:
         tension = rel.get('tension', 0)
         description = {'rank': {k: v for k, v in rel['rank'].items() if k not in ('pending', 'sources') and (private(scope) or k != 'reason')}, 'interaction_frequency': rel['frequency'], 'familiarity': 'familiar' if rel['familiarity'] >= 0.35 else 'shared history present; judge familiarity from the episodes' if episodes else 'getting acquainted', 'tone': 'warm' if warmth > 0.6 else 'contextual', 'tension': 'recent friction; do not force appeasement' if tension > 0.15 else 'no established conflict', 'addressing': rel.get('addressing', 'follow actual conversation, never invent relationships'), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', ''), 'continuity': 'Use the actual shared episodes below; low calibration scores do not negate shared history. Playful sulking is character banter, not evidence of genuine hostility.'}
         commitments = self.db.rows("SELECT id,content,due FROM kei_commitments WHERE person=? AND scope=? AND status='open' LIMIT 5", (person, scope))
-        payload = {'relationship': description, 'memories': items[:12], 'episodes': episodes, 'commitments': commitments, 'group': self.relationships.group(scope, through)}
+        payload = {'relationship': description, 'affect': self.affect.context(person, scope, through), 'memories': items[:12], 'episodes': episodes, 'commitments': commitments, 'group': self.relationships.group(scope, through)}
         budget = self.cfg['memory'].get('memory_context_chars', 32000)
         while len(dumps(payload)) > budget and payload['episodes']:
             payload['episodes'].pop()
@@ -353,6 +356,7 @@ class Memory:
         for source in sources:
             self.db.execute('DELETE FROM kei_self_opinions WHERE source=?', (source,))
         self.relationships.forget(person, scope, sources)
+        self.affect.forget(person, scope, sources)
         for table in ('kei_social_events', 'kei_memories', 'kei_episodes', 'kei_commitments'):
             for row in self.db.rows('SELECT id,sources FROM ' + table):
                 if sources.intersection(json.loads(row['sources'])):

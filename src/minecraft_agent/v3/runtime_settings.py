@@ -5,6 +5,7 @@ DEFAULTS={
  'chat_model':'ag/gemini-3.8-flash-low','agent_model':'ag/gemini-3.8-flash-high',
  'trigger_name':'kei','followup_seconds':90,'followup_turn_limit':4,'context_messages':10,
  'relationship_notice_min_delta':.006,'rank_confirmation_hours':6,'rank_notice_hours':6,
+ 'dynamic_mood':True,'romantic_bonds':True,'work_sulking':True,
  'proactive_enabled':True,'dm_daily_limit':3,'quiet_start':22,'quiet_end':8,
  'recent_turns':96,'memory_context_chars':32000,'retention_days':90,'incremental_hours':6,'daily_hour':4,
 }
@@ -29,7 +30,7 @@ def validate(key,value):
  elif key=='trigger_name':
   if not isinstance(value,str) or not 2<=len(value.strip())<=24 or not re.fullmatch(r'[\w -]+',value):raise ValueError('Use a short name without mentions or punctuation.')
   value=value.strip().casefold()
- elif key=='proactive_enabled':
+ elif key in ('proactive_enabled','dynamic_mood','romantic_bonds','work_sulking'):
   if type(value) is not bool:raise ValueError('Proactive messages must be on or off.')
  elif key in BOUNDS:
   low,high=BOUNDS[key]

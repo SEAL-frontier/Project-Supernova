@@ -38,9 +38,9 @@ playwright install chromium
 Docker alternative:
 
 ```sh
-docker build -t keys-keys:3.3.0-rc.1 .
-docker build -f Dockerfile.browser -t keys-keys:3.3.0-rc.1-browser .
-docker run --rm -it -v "$PWD/data:/app/data" keys-keys:3.3.0-rc.1-browser server add --kind panel
+docker build -t keys-keys:3.4.0-rc.1 .
+docker build -f Dockerfile.browser -t keys-keys:3.4.0-rc.1-browser .
+docker run --rm -it -v "$PWD/data:/app/data" keys-keys:3.4.0-rc.1-browser server add --kind panel
 ```
 
 2FA/captcha is an authentication blocker, not an invitation to disable it. A verified

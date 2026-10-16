@@ -10,7 +10,7 @@
 
 Actually, her problem. Your server. We got the custody arrangement wrong. 😭
 
-![Version](https://img.shields.io/badge/version-3.3.0--rc.1-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-3.4.0--rc.1-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
@@ -48,7 +48,7 @@ The open-source goal is to let other people run that setup with their own server
 models and characters. The original experiment happened to hand the job to Tendou Kei.
 She received a Minecraft server instead of a peaceful afternoon. 😭
 
-> **3.3.0-rc.1 is a release candidate.** Stable requires three things: natural social behavior
+> **3.4.0-rc.1 is a release candidate.** Stable requires three things: natural social behavior
 > with durable memory, plugin/connectors verified on a real server, and a clean-clone
 > setup that does not require finding the developer. Evidence lives in
 > [the implementation log](IMPLEMENTATION.md) and [feature matrix](FEATURE_MATRIX.md).

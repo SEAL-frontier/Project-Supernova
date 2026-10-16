@@ -59,6 +59,7 @@ def relationships(dashboard,request):
  for user in users:
   profile=ux.engine.memory.relationship(user['person'],'global');rank=profile['rank'];aliases=ux.db.rows('SELECT DISTINCT alias FROM kei_aliases WHERE person=?',(user['person'],))
   rows.append({**{k:user[k] for k in ('id','display_name','username','avatar_url','message_count','last_at')},'rank':{k:rank.get(k) for k in ('label','category','changed')},'dimensions':{k:profile.get(k,0) for k in ('familiarity','trust','warmth','playfulness','tension','confidence','interaction_frequency')},'aliases':[r['alias'] for r in aliases],
+   'calibrated':profile['frequency']['meaningful_sessions_30']>=3,'bond':{k:v for k,v in ux.engine.memory.affect.bond(user['person']).items() if k in ('kind','label','changed')},'mood':ux.engine.memory.affect.context(user['person'],'global'),
    'changes':ux.db.rows('SELECT label,at FROM kei_relationship_changes WHERE person=? ORDER BY at DESC LIMIT 8',(user['person'],))})
  sort=request.query.get('sort','familiarity')
  rows.sort(key=lambda r:r['dimensions'].get(sort,0) if sort in ('familiarity','trust','warmth','tension') else r['message_count'],reverse=True)

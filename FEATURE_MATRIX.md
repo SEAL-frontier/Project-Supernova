@@ -1,9 +1,13 @@
-# Supernova 3.3.0-rc.1 — feature matrix
+# Supernova 3.4.0-rc.1 — feature matrix
 
 Implemented = a code path with evidence. Partial = an important acceptance gap remains. This is a prerelease; transport mocks are not production proof.
 
 | Feature | Status | Code and evidence | Remaining boundary |
 | --- | --- | --- | --- |
+| Persistent daily + personal affect | Implemented; field acceptance partial | Stored bounded daily disposition; sourced personal events decay, survive restart and enter real chat context; privacy/forgetting tests | No claims of actual sentience or offscreen experiences; multi-day field acceptance remains open |
+| Immediate DBH-style rank delivery | Implemented; field acceptance partial | Confirmed old Warm event changed at 18:33 but was sent separately at 18:37; new regression binds double-arrow rank notice into the same answer, no standalone outbox | Uncertain sends are not blindly retried; background reflection changes accompany the next relevant answer |
+| Crush / mutual bond / breakup | Implemented; field acceptance partial | Separate nonsexual bond axis, source/intent checks, personal opt-out, prompt breakup and no unsolicited rekindling | One-sided Crush does not claim a mutual relationship; real user acceptance pending |
+| Broader typed decision routing | Implemented; field acceptance partial | Real OpenAI decisions: participation react 0.99, rank supported 0.94, unsupported mutual bond 0.80; initiative 0.64 correctly fell back; Jev contract tests | A classification call is not automatically a latency improvement; measurements required |
 | Global per-person relationship and linked-account continuity | Implemented | Global profile/rank migration, cross-context frequency, scoped raw evidence and forgetting regressions; isolated snapshot checked 15 profiles; live deployment has no channel-specific rank rows and database integrity OK | No invented affection/rank changes during migration; field progression remains under observation |
 | Ranked owner overview and separate Global relationships | Implemented | Guild aggregation across channels, ranked DMs, delivery-aware active-DM labels; owner-only API tests; local UI tested with 39 synthetic people | Retained interaction counts are not lifetime totals or Discord online presence |
 | Chat low / agent high, configurable | Implemented | Request-local model views; concurrent transport regression; actual Gemini 3.8 low social response + high native tool call | Custom providers need their own valid model IDs |
@@ -19,7 +23,7 @@ Implemented = a code path with evidence. Partial = an important acceptance gap r
 | Historical reply/react/status targets | Implemented | Existence/channel/age/own-progress validation, task source retained | Deleted targets degrade gracefully |
 | Paragraphs and ack/progress ordering | Implemented | formatting.py, delivery origins and acknowledgment gates | Uncertain network sends are not blindly replayed |
 | Social selection | Partial | One-pass Gemini plus optional fast decisions; real API replay | Actual replay exposed mistakes; quiet/work backend policies added, sustained acceptance open |
-| Irritation never vetoes authorized work | Implemented | Separate lifecycle and permissions, work-safe reply policy | Natural-language ambiguity can still need clarification |
+| Configurable one-turn nonurgent social holds | Implemented; field acceptance partial | Durable original goal/server, natural force/please resume, deterministic permission revalidation; urgent and scheduled work bypass holds | Social waiting is separate from operational approval; live acceptance pending |
 | OpenAI Decisions | Implemented | Official /v1/decisions, gpt-6-luna; actual API calls | Used for ambiguous participation, not every DM |
 | Jev compatibility | Partial | Official System One adapter and schema-contract tests | No live Jev key/probe |
 | 9router token-saver header | Implemented | Chat client sends x-9router-token-saver: off; operator OpenCode provider configured | Existing OpenCode sessions may need config reload |
@@ -116,3 +120,16 @@ rc.4 adds a regression for a single opted-in gentle followup about an existing r
 | Custom permission form without TOML | Implemented | Per-tool switches/menus, path and command patterns, guidance; backend validates before storage/dispatch. |
 | Animated compact dropdowns and collapsible run mode | Implemented | Dashboard HTML/CSS/JS with keyboard controls and reduced-motion fallback. |
 | Browser/device visual acceptance | Pending | Source checks and local browser pass remain required before release. |
+
+
+## 3.4.0-rc.1 acceptance evidence
+
+- Private regressions cover daily persistence and bounded day transitions, sourced personal affect, privacy and forgetting, one-sided crush versus explicit mutual intent, breakup/platonic boundaries, inline double-arrow rank delivery, force-resumed original work, real task launch with reaction-only acknowledgment, urgent-work bypass, and both decision-provider contracts.
+- An isolated production SQLite snapshot migrated with integrity OK and the existing Warm rank intact. Actual OpenAI Decisions requests ran for participation, rank, bond and initiative. A DM thumbs-up chose react with confidence 0.99 and zero generator calls; the full turn took about 1.57 s in this probe. A normal affectionate chat replay replied through the existing chat model in about 5.46 s. These are individual measurements, not a throughput or latency guarantee.
+- The initiative probe was below confidence threshold and conservatively fell back; it was not counted as an accurate decisive classification. Casual affection did not create a mutual romantic relationship. No Discord messages were sent by the isolated replay and production memories were not changed.
+- Local owner UI exposed the mood/bond/work-hold controls and personal connection picker without console errors. Long-term naturalness, real-user romantic progression and mobile browser acceptance remain open. The unchanged Minecraft bridge protocol/artifact does not require a server restart for this update.
+
+
+Production deployment of 3.4.0-rc.1 was verified with a fresh ready marker, database integrity OK, six required schema tables present, existing rank labels preserved, and unchanged protected config/persona/secret hashes. Existing web session records survived restart; a real authenticated owner browser refresh loaded the current version and correct profile without another login. Local application HTTP returned 200 for the landing page and 401 for unauthenticated state/global routes. The public site also loaded in the real browser. No fresh conversation failure was observed during the smoke window. This is operational verification, not multi-day social acceptance.
+
+Regression results: **296 private checks** and **70 checks against the stripped public source** passed; JavaScript syntax and Python compilation checks also passed. The runtime and public source preserve the existing bridge protocol; no Minecraft restart was needed.

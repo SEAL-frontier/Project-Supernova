@@ -38,7 +38,7 @@ class DecisionBroker:
     def enabled(self):
         return self.cfg.get("provider", "off") in ("openai", "jev")
 
-    async def evaluate(self, state, client=None):
+    async def evaluate(self, state, client=None, *, questions=None, purpose='participation'):
         if not self.enabled:
             return None
         provider = self.cfg["provider"]
@@ -50,12 +50,13 @@ class DecisionBroker:
         if not key:
             return None
         started = time.perf_counter()
+        questions = QUESTIONS if questions is None else questions
         if provider == "openai":
             base = self.cfg.get("base_url", "https://api.openai.com/v1").rstrip("/")
             body = {
                 "model": self.cfg.get("model", "gpt-6-luna"),
                 "input": json.dumps(state, ensure_ascii=False),
-                "questions": QUESTIONS,
+                "questions": questions,
             }
             endpoint = base + "/decisions"
         else:
@@ -69,7 +70,7 @@ class DecisionBroker:
                         "instructions": q["instructions"],
                         "criteria": {c["value"]: c.get("description") for c in q["choices"]},
                     }
-                    for q in QUESTIONS
+                    for q in questions
                 },
             }
             endpoint = base + "/systemone"
@@ -88,7 +89,7 @@ class DecisionBroker:
                 answers = {a.get("name"): a for a in answers}
             if not isinstance(answers,dict):raise ValueError('invalid_answers')
             out = {}
-            for q in QUESTIONS:
+            for q in questions:
                 answer = answers.get(q["name"], {})
                 if not isinstance(answer,dict):raise ValueError('invalid_answer')
                 if answer.get("type") != "choice" or answer.get("choice") not in [
@@ -105,17 +106,18 @@ class DecisionBroker:
                 out[q["name"]] = answer["choice"]
                 out[q["name"] + "_confidence"] = confidence
             LOG.info(
-                "SOCIAL_DECISION provider=%s action=%s intent=%s confidence=%.3f duration_ms=%.1f",
+                "SOCIAL_DECISION provider=%s purpose=%s action=%s intent=%s confidence=%.3f duration_ms=%.1f",
                 provider,
-                out["action"],
-                out["intent"],
-                out["action_confidence"],
+                purpose,
+                out.get('action',out.get('judgment','unknown')),
+                out.get('intent','n/a'),
+                out.get('action_confidence',out.get('judgment_confidence',0)),
                 (time.perf_counter() - started) * 1000,
             )
             return out
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             LOG.warning(
-                "SOCIAL_DECISION_FALLBACK provider=%s error=%s", provider, type(exc).__name__
+                "SOCIAL_DECISION_FALLBACK provider=%s purpose=%s error=%s", provider, purpose, type(exc).__name__
             )
             return None
         finally:
@@ -126,4 +128,10 @@ class DecisionBroker:
         return bool(
             decision
             and decision["action_confidence"] >= float(self.cfg.get("min_confidence", 0.65))
+            and decision.get('intent_confidence',1) >= float(self.cfg.get('min_confidence',.65))
         )
+
+    async def judge(self,state,instructions,choices=('supported','unsupported'),purpose='relationship',client=None):
+        result=await self.evaluate(state,client,questions=[{'type':'choice','name':'judgment','instructions':instructions,'choices':[{'value':c} for c in choices]}],purpose=purpose)
+        if not result or result['judgment_confidence']<float(self.cfg.get('min_confidence',.65)):return None
+        return result['judgment']

@@ -209,3 +209,14 @@ Host User / Root chooses the identity of SSH commands. Panel, Wings and plugin a
 ## Approval behavior
 
 Ask for approval and Read only both pause before a write, but they ask different people: Ask for approval goes to the task starter; Read only goes to the server/host owner. Approve for me asks the task starter only when deterministic risk checks flag a step. Routine admin activity reports are optional FYI notifications and never serve as approval cards. The dashboard is English; Discord conversation/persona language is unchanged.
+
+
+## Mood, feelings and work
+
+Global settings includes **Dynamic mood**, **Character romantic bonds** and **One-turn social sulking**. Core persona remains your own; a low-energy day changes delivery rather than rewriting identity or server permissions.
+
+Each person chooses **Keep things platonic**, **Only romance I explicitly invite**, or **Let feelings develop naturally** in Chat settings or Discord Privacy settings. Natural development can mean a one-sided character crush; it never declares the human is in a relationship. Mutual romance needs an explicit invitation and shared history. Saying stop flirting or breaking up ends that direction without bargaining. These are fictional, nonsexual character states.
+
+Single arrows show meaningful point movement while keeping the current rank. Double arrows show a major movement or confirmed rank/bond change. Notices accompany a relevant answer instead of arriving as unrelated DMs minutes later. New users see that relationship defaults are uncalibrated; 50% is a neutral prior, not proof of affection or trust.
+
+When social sulking is enabled, a directly assigned nonurgent job may occasionally wait one turn. The bot says it has **not started**. Say **do it**, **force**, **please**, **làm đi**, or **thôi mà** to resume the original job; say **cancel** to drop it. A hold never grants access, replaces risk approval, stalls scheduled jobs or blocks emergency recovery. Disable it globally for strictly operational deployments.

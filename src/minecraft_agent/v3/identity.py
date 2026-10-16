@@ -74,6 +74,10 @@ class Identity:
             for table in ('kei_relationships','kei_relationship_ranks','kei_relationship_activity','kei_relationship_credits','kei_relationship_changes','kei_relationship_signals','kei_relationship_delta_events','kei_emotion_credits','kei_social_moods','kei_aliases'):
                 self.db.execute('UPDATE OR IGNORE '+table+' SET person=? WHERE person=?',(target,existing))
                 self.db.execute('DELETE FROM '+table+' WHERE person=?',(existing,))
+            for table in ('kei_affect_events','kei_bonds','kei_bond_events'):
+                if self.db.one("SELECT name FROM sqlite_master WHERE type='table' AND name=?",(table,)):
+                    self.db.execute('UPDATE OR IGNORE '+table+' SET person=? WHERE person=?',(target,existing))
+                    self.db.execute('DELETE FROM '+table+' WHERE person=?',(existing,))
         self.db.execute(
             "UPDATE kei_accounts SET person=?,verified=1 WHERE platform=? AND account=? AND server=?",
             (target, "minecraft", uuid, server),
