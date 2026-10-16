@@ -217,11 +217,13 @@ class Engine:
                             if call['id'] not in answered:
                                 history.append({'role':'tool','tool_call_id':call['id'],'content':dumps({'interrupted':'Inspect saved action receipts and perform readback; never blindly repeat a mutation.'})})
                 prior_goal=task['goal']
-                turn=0;empty_turns=0;status_only_turns=0;status_only_since=None;repeats={}
+                from .watchdog import TaskWatchdog
+                watchdog=TaskWatchdog(self.db,k,task['goal'])
+                turn=0;empty_turns=0;status_only_turns=0;status_only_since=None;repeats={};finish_rejections=0
                 while True:
                     history[0]['content']=system.replace(initial_persona,persona_prompt(self.cfg,self.db,task['requester']),1)
                     current=self.db.one('SELECT * FROM kei_tasks WHERE id=?',(k,))
-                    if current['status']=='cancelled':return
+                    if current['status'] in ('cancelled','paused'):return
                     if current['goal']!=prior_goal:
                         history.append({'role':'user','content':'Requester updated goal: '+current['goal']});prior_goal=current['goal']
                     turn+=1
@@ -238,7 +240,7 @@ class Engine:
                             self.progress.phase(k,'Kết nối lại model; giữ nguyên tiến độ')
                             await asyncio.sleep(2*(attempt+1))
                     latest=self.db.one('SELECT status,goal FROM kei_tasks WHERE id=?',(k,))
-                    if latest['status']=='cancelled':return
+                    if latest['status'] in ('cancelled','paused'):return
                     if latest['goal']!=prior_goal:
                         history.append({'role':'user','content':'Requester changed instructions while you were thinking. Discard your previous action proposal. Current goal: '+latest['goal']})
                         prior_goal=latest['goal'];continue
@@ -257,7 +259,7 @@ class Engine:
                     history.append(response)
                     for index,call in enumerate(tcalls):
                         latest=self.db.one('SELECT status,goal FROM kei_tasks WHERE id=?',(k,))
-                        if latest['status']=='cancelled':return
+                        if latest['status'] in ('cancelled','paused'):return
                         if latest['goal']!=prior_goal:
                             for skipped in tcalls[index:]:history.append({'role':'tool','tool_call_id':skipped['id'],'content':dumps({'not_executed':'Requester changed goal; replan'})})
                             break
@@ -270,6 +272,8 @@ class Engine:
                             missing=self.completion_missing(actions)
                             succeeded=succeeded and not missing
                             if args.get('success') and missing:
+                                finish_rejections+=1
+                                if finish_rejections>=3:raise AgentFrozen('Model lặp xác nhận hoàn tất nhưng không bổ sung hậu kiểm còn thiếu: '+dumps(missing)[:600])
                                 history.append({'role':'tool','tool_call_id':call['id'],'content':dumps({'finished':False,'missing_readback':missing,'instruction':'Perform the missing readback, then finish. Do not repeat already executed actions.'})})
                                 continue
                             # Complete all outstanding calls before persisting a valid transcript.
@@ -303,6 +307,10 @@ class Engine:
                                 self.request_approval(task,name,args,p,executor)
                                 return
                         if name not in ('update_plan','update_progress','ask_requester'):
+                            warning=watchdog.observe(name,args,result,effect_of(name,args))
+                            if warning:
+                                if warning['frozen']:raise AgentFrozen(warning['reason'])
+                                result={**result,'loop_warning':warning['reason'],'next_step':'Use existing receipts. Verify the exact missing postcondition, choose a genuinely different method, or report the concrete blocker.'}
                             stable={key:value for key,value in result.items() if key not in ('observed_at','action_id','timestamp')}
                             signature=__import__('hashlib').sha256((name+dumps(args)+dumps(stable)).encode()).hexdigest()
                             count,since=repeats.get(signature,(0,time.monotonic()));repeats[signature]=(count+1,since)

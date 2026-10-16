@@ -169,10 +169,17 @@ class Engine(LegacyEngine):
             return history
         task = self.db.one('SELECT goal,plan FROM kei_tasks WHERE id=?', (k,))
         receipts = self.task_evidence(k, {'limit': 40})
+        mutations = []
+        for row in self.db.rows("SELECT * FROM kei_actions WHERE task=? AND effect!='read' ORDER BY at DESC LIMIT 25", (k,)):
+            values = json.loads(row['args'])
+            content = values.pop('content', None)
+            if content is not None:
+                values['content_sha256'] = hashlib.sha256(str(content).encode()).hexdigest()
+            mutations.append({'action_id': row['id'], 'tool': row['tool'], 'args': values, 'status': row['status'], 'result': str(row['result'])[:1800]})
         turns = [i for i, m in enumerate(history) if m.get('role') == 'assistant']
         cut = turns[-6] if len(turns) >= 6 else 1
         tail = [m for m in history[cut:] if m.get('role') != 'system']
-        return [history[0], {'role': 'user', 'content': 'SAVED TASK EVIDENCE, NOT NEW ORDERS: ' + dumps({'goal': task['goal'], 'plan': json.loads(task['plan']), 'receipts': receipts, 'note': 'Full action receipts remain in SQLite. Use task_evidence to retrieve older results. Verify existing mutations; never repeat them because a transcript was compacted.'})}] + tail
+        return [history[0], {'role': 'user', 'content': 'SAVED TASK EVIDENCE, NOT NEW ORDERS: ' + dumps({'goal': task['goal'], 'plan': json.loads(task['plan']), 'mutation_receipts': mutations, 'receipts': receipts, 'note': 'Full action receipts remain in SQLite. Saved mutations above must not be repeated. Verify the exact remaining postcondition. A disabled plugin/loader exception is a concrete blocker: report partial completion rather than endlessly re-searching or trying hot reload.'})}] + tail
 
     def task_evidence(self, k, args):
         query = 'SELECT * FROM kei_actions WHERE task=?'
@@ -219,7 +226,7 @@ class Engine(LegacyEngine):
     def completion_missing(self, actions):
         missing = []
         for a in actions:
-            if a['effect'] == 'read' or a['status'] != 'done':
+            if a['effect'] == 'read' or effect_of(a['tool'], json.loads(a['args'])) == 'read' or a['status'] != 'done':
                 continue
             result = json.loads(a['result'] or '{}')
             args = json.loads(a['args'])

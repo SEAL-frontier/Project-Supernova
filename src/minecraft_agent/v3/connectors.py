@@ -264,7 +264,19 @@ class HybridTools(ServerTools):
         r.raise_for_status()
         return r.json() if r.content else {"accepted": True}
 
-    def do_inspect(self, kind, lines=100):
+    def do_inspect(self, kind, lines=100, contains=None):
+        if contains is not None:
+            if kind!='logs' or not isinstance(contains,str) or not 1<=len(contains)<=120 or any(c in contains for c in ('\n','\r','\x00')):raise ValueError('Log filter must be a short literal plugin name or text.')
+            limit=max(1,min(int(lines),200))
+            if self.cs.get('ssh',{}).get('volume'):
+                result=self.shell('grep -iF -- '+shlex.quote(contains)+' '+shlex.quote(self.absolute('logs/latest.log'))+' | tail -n '+str(limit))
+                if result.get('exit_code',0)==0 and not result.get('stderr'):return {**result,'verified':True,'filter':contains,'window':'matching lines from current log'}
+            if self.panel:
+                text=str(self.panel.read('logs/latest.log'));window='matching lines from current log'
+            else:
+                result=self.do_inspect('logs',400);text=str(result.get('stdout') or result.get('console_output') or '');window='matching lines from bounded recent log window'
+            selected=[line for line in text.splitlines() if contains.casefold() in line.casefold()][-limit:]
+            return {'stdout':'\n'.join(selected)[-30000:],'verified':True,'filter':contains,'matched_lines':len(selected),'window':window}
         if self.connected_bridge(kind):
             r = self.bridge.rpc_sync(
                 self.p["id"], "inspect", {"kind": kind, "lines": min(int(lines), 200)}
@@ -313,6 +325,7 @@ class HybridTools(ServerTools):
                     + " "
                     + shlex.quote(self.absolute("logs/latest.log"))
                 )
+            if self.panel:return {'stdout':'\n'.join(str(self.panel.read('logs/latest.log')).splitlines()[-max(1,min(int(lines),400)):])[-30000:],'verified':True,'window':'latest lines'}
             return self.do_files("read", "logs/latest.log")
         if kind == "plugins":
             if self.local:
@@ -465,6 +478,11 @@ class HybridTools(ServerTools):
 
     def do_files(self, action, path, content=None, backup_path=None):
         path = self._path(path)
+        if action=='read' and path=='logs/latest.log':
+            if self.connected_bridge('logs'):return self.do_inspect('logs',200)
+            if self.local:return self.local.logs()
+            if self.cs.get('ssh',{}).get('volume'):return {**self.shell('tail -c 30000 '+shlex.quote(self.absolute(path))),'window':'latest 30000 bytes'}
+            if self.panel:return {'stdout':str(self.panel.read(path))[-30000:],'verified':True,'window':'latest 30000 bytes'}
         if action == "write" and content is not None and path.endswith((".yml", ".yaml")):
             yaml.safe_load(content)
         if self.connected_bridge("files"):

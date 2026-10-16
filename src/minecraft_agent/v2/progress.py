@@ -61,12 +61,13 @@ def render(task,progress,mode,note=False):
     objective=task['goal'].split('\nAdditional requester instruction:',1)[0]
     lines=[clean(objective,110)]
     if task['status']=='running':lines+=['','**Đang:** '+clean(re.sub(r'^(?:Đang[ :]+)+','',progress['phase'],flags=re.I),100)]
+    elif task['status'] in ('paused','failed','reconcile') and task.get('result'):lines+=['','**Chưa xong:** '+clean(task['result'],280)]
     icons={'pending':'☐','running':'◉','done':'☑','skipped':'—'}
     steps=json.loads(progress['steps'])
     if steps:lines.append('')
     for s in steps[:7]:
         icon=icons.get(s['state'],'☐')
-        if s['state']=='running' and task['status'] in ('failed','cancelled','reconcile'):icon='!'
+        if s['state']=='running' and task['status'] in ('paused','failed','cancelled','reconcile'):icon='!'
         lines.append(icon+' '+clean(s['label'],80))
     if len(steps)>7:lines.append(f'… còn {len(steps)-7} bước')
     if mode=='advanced':

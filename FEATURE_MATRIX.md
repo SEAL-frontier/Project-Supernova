@@ -1,4 +1,10 @@
-# Supernova 3.4.0-rc.1 — feature matrix
+# Supernova 3.4.0-rc.2 — feature matrix
+
+## Agent-loop hotfix evidence
+
+An actual user-requested configuration job ran 173 actions over 64 minutes. Its successful but unchanged reads bypassed the previous error-only loop guard. The new durable watchdog, replayed against the original receipts in isolation, warned at action 16 and froze unchanged evidence at action 24, 278 seconds after the first action. A real filtered log read exposed a disabled plugin and repeated classloader/zip failures; config-on-disk is not runtime enablement. Hot plugin-manager lifecycle commands are blocked, while read-only info/status commands remain available. No rank/mood policy was changed in this hotfix.
+
+The existing task was interrupted with its complete history and a database backup preserved. Production plugin repair/restart is separate from this agent-loop fix; no successful gameplay verification is claimed.
 
 Implemented = a code path with evidence. Partial = an important acceptance gap remains. This is a prerelease; transport mocks are not production proof.
 

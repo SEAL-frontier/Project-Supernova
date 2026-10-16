@@ -1,8 +1,19 @@
 # Changelog
 
-Current public version: **3.4.0-rc.1**. Architecture: **Supernova**.
+Current public version: **3.4.0-rc.2**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 3.4.0-rc.2 — Stop investigating the same evidence forever
+
+- Confirmed a real configuration job spent over an hour repeating successful file reads and near-identical documentation searches. Add durable per-task evidence fingerprints: repeated successful reads receive a strategy warning, then a concrete freeze if the same evidence is requested again. This is a no-progress check, not an overall job timeout. Explicit live monitoring can still collect unchanged samples.
+- Preserve completed mutation receipts during history compaction, even after newer read-only noise pushes them outside the most recent receipt window. Repeated rejected completion claims now surface their exact missing verification.
+- Add literal plugin filters to log inspection. Reading `logs/latest.log` now returns the latest window rather than an obsolete file prefix; matching log inspection can read plugin-specific lines past high-volume world-generation chatter.
+- Reject unsafe hot plugin lifecycle operations through PlugMan, which produced observed classloader errors in the incident. Recognize its info/status/test commands as reads, including old saved actions during completion checks. Do not claim plugin enablement from an accepted command.
+- Enforce explicit `site:` search restrictions before fetching fallback results. Unrelated fallback pages become an empty search instead of useful-looking evidence.
+- Show a concrete paused/failure reason on the existing progress card. Preserve task history and backups when interrupting a confirmed loop.
+
+Validation: real 173-action incident replay warns at call 16 and identifies stagnation at call 24 (278 seconds); actual filtered production plugin logs expose the classloader failure. No Minecraft restart or plugin reinstall was performed solely for this hotfix. Relationship/rank behavior is unchanged.
 
 ## 3.4.0-rc.1 — A mood that carries into the next conversation
 

@@ -21,7 +21,7 @@ def execute_traced(executor,name,args,mode,confirmed,callback):
     finally:_progress.reset(token)
 
 DEFINITIONS=[
- tool('inspect','Read real evidence: Wings stats, host/JVM stats, logs, plugins, players, TPS/MSPT, Spark health.',{'kind':choices('status','host','logs','plugins','players','tps','health'),'lines':{'type':'integer'}},['kind']),
+ tool('inspect','Read real evidence. For plugin reload/config verification use kind=logs with contains set to the exact plugin name; avoid unrelated log spam.',{'kind':choices('status','host','logs','plugins','players','tps','health'),'lines':{'type':'integer'},'contains':{'type':'string','description':'Optional literal plugin/text filter for logs. Reads matching recent lines instead of repeatedly reading the start of a large log.'}},['kind']),
  tool('console','Run any Minecraft/plugin console command. Read commands and bounded profiler are observational; other commands change state. Output is log evidence, not automatic success.',{'command':S},['command']),
  tool('power','Start/stop/restart Minecraft through Wings; wait for the actual postcondition.',{'action':choices('start','stop','restart','kill')},['action']),
  tool('files','List or read server files; write with per-file backup and readback; restore backup; remove plugin/file preserving backup.',{'action':choices('list','read','write','restore','remove'),'path':S,'content':S,'backup_path':S},['action','path']),
@@ -34,7 +34,7 @@ DEFINITIONS=[
 
 def console_read(command):
     cmd=command.strip().lstrip('/').lower()
-    return cmd in ('list','tps','mspt','plugins','version','whitelist list','banlist','spark tps','spark health show','spark health show --memory','spark health show --network') or cmd.startswith(('spark profiler info','spark profiler open','spark profiler start','spark profiler stop','spark profiler cancel'))
+    return cmd in ('list','tps','mspt','plugins','version','worlds','whitelist list','banlist','spark tps','spark health show','spark health show --memory','spark health show --network') or bool(re.fullmatch(r'(?:plugman|plugmanx) (?:info|status|test) [a-z0-9_.-]+',cmd)) or cmd.startswith(('spark profiler info','spark profiler open','spark profiler start','spark profiler stop','spark profiler cancel'))
 
 def effect_of(name,args):
     if name in ('inspect','plugin_search','fetch_url','profiler','web_search','verify_action','find_server_files','task_evidence'):return 'read'
@@ -110,6 +110,7 @@ class ServerTools:
     def execute(self,name,args,mode='change',confirmed=False):
         known={x['function']['name'] for x in DEFINITIONS}
         if name not in known:raise ValueError('Unknown tool '+name)
+        if name=='console' and re.match(r'^/?(?:\w+:)?(?:plugman|plugmanx)\s+(?:enable|disable|load|unload|reload)\b',args.get('command','').strip(),re.I):raise ValueError('Hot plugin lifecycle changes are unsupported: classloader state can be corrupted. Inspect the plugin-specific error, then use a clean authorized server restart; do not retry PlugMan enable/load/reload.')
         effect=effect_of(name,args)
         if mode=='observe' and effect!='read':raise PermissionError('Diagnostic task may not change server; ask requester to authorize repair')
         if dangerous(name,args) and not confirmed:raise DangerousAction('This exact action needs requester confirmation')

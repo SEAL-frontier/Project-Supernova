@@ -63,6 +63,19 @@ class Search(WebSearch):
     async def search(self, query, limit=5):
         await self.notify("searching")
         result = await super().search(query, limit)
+        restrictions=re.findall(r'\bsite:([^\s\"]+)',query,re.I)
+        if restrictions and result.get('results'):
+            def relevant(row):
+                actual=urlsplit(row.get('url',''))
+                for restriction in restrictions:
+                    expected=urlsplit('https://'+restriction)
+                    if (actual.hostname==expected.hostname or (actual.hostname or '').endswith('.'+str(expected.hostname))) and actual.path.casefold().startswith(expected.path.casefold().rstrip('/')):return True
+                return False
+            original=result['results'];result['results']=[row for row in original if relevant(row)];result['discarded_offsite']=len(original)-len(result['results'])
+            if 'fetched' in result:
+                result['fetched']=[row for row in result['fetched'] if relevant(row)]
+                result['fetched_pages']=len(result['fetched']);result['searched_sites']=len({row['domain'] for row in result['fetched']})
+            if not result['results'] and not result.get('error'):result['status']='empty'
         if result.get("cached") and "searched_sites" in result:
             await self.notify(
                 "done",
