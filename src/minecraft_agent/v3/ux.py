@@ -116,8 +116,7 @@ class Access:
                 )
                 # Explicit chat shadows old config assignments as well as current DB grants.
                 self.grant(issuer, subject, server, "chat")
-                from .permissions import save
-                save(self.db,self.engine.cfg,issuer,subject,server,'minecraft','read_only',False)
+                self.clear_policy(subject,server)
                 self.record(server, subject, issuer, "admin_revoke", "chat")
 
     def revoke(self, issuer, subject, server):
@@ -130,8 +129,7 @@ class Access:
             self.delegate(issuer, subject, server, False)
             return
         self.grant(issuer, subject, server, "chat")
-        from .permissions import save
-        save(self.db,self.engine.cfg,issuer,subject,server,'minecraft','read_only',False)
+        self.clear_policy(subject,server)
         self.record(server, subject, issuer, "revoke", "chat")
 
     def coowner(self,issuer,subject,server,enabled=True):
@@ -148,8 +146,7 @@ class Access:
                 self.db.execute('UPDATE kei_server_owners SET revoked=? WHERE server=? AND user=?',(time.time(),server,str(subject)))
                 self.db.execute('UPDATE kei_server_admins SET revoked=? WHERE server=? AND user=?',(time.time(),server,str(subject)))
                 self.db.execute('INSERT OR REPLACE INTO kei_grants VALUES (?,?,?,?)',(str(subject),server,'chat',str(issuer)))
-                from .permissions import save
-                save(self.db,self.engine.cfg,issuer,subject,server,'minecraft','read_only',False)
+                self.clear_policy(subject,server)
             self.record(server,subject,issuer,'owner_grant' if enabled else 'owner_revoke')
 
     def configure_member(self,issuer,subject,server,role,level='copilot',execution=None):
@@ -183,6 +180,12 @@ class Access:
         tool=self.engine.tools.get(server);has_ssh=bool(getattr(tool,'cs',{}).get('ssh'))
         save(self.db,self.engine.cfg,issuer,subject,server,extent,level,has_ssh,rules)
         self.record(server,str(subject),str(issuer),'execution_policy',extent+':'+level)
+
+    def clear_policy(self,subject,server):
+        from .permissions import install
+        install(self.db)
+        self.db.execute('DELETE FROM kei_execution_permissions WHERE subject=? AND server=?',(str(subject),server))
+        self.db.execute('DELETE FROM kei_custom_permissions WHERE subject=? AND server=?',(str(subject),server))
 
     def visible(self, user, scope=None):
         assigned = set(self.engine.assigned(str(user)))
@@ -250,9 +253,52 @@ class UserExperience:
         self.cfg = bot.cfg
         self.access = Access(self.engine)
         self.engine.access = self.access
+        self._load_global_defaults()
         self.pending_connections = {}
         self.dashboard = None
         self.people_cache = {}
+
+    def _load_global_defaults(self):
+        """Apply the owner's persisted bot-wide defaults before commands start."""
+        rows=self.db.rows('SELECT key,value FROM kei_global_settings')
+        saved={row['key']:json.loads(row['value']) for row in rows}
+        if 'timezone' in saved:self.cfg['timezone']=saved['timezone']
+        if 'allow_self_service' in saved:self.cfg['allow_self_service']=bool(saved['allow_self_service'])
+        if 'default_run_mode' in saved:self.cfg['default_execution_mode']=saved['default_run_mode']
+        self.engine.cfg.update(self.cfg)
+
+    def global_settings(self,user):
+        if str(user)!=str(self.cfg['owner_id']):raise PermissionError('Chỉ main owner mới chỉnh được bot-wide settings.')
+        saved={row['key']:json.loads(row['value']) for row in self.db.rows('SELECT key,value FROM kei_global_settings')}
+        return {'timezone':str(self.cfg.get('timezone','Asia/Ho_Chi_Minh')),
+                'allow_self_service':bool(self.cfg.get('allow_self_service',False)),
+                'default_run_mode':self.cfg.get('default_execution_mode','default')}
+
+    def update_global_settings(self,user,values):
+        if str(user)!=str(self.cfg['owner_id']):raise PermissionError('Chỉ main owner mới chỉnh được bot-wide settings.')
+        if not isinstance(values,dict) or not values or not set(values)<= {'timezone','allow_self_service','default_run_mode'}:
+            raise ValueError('Chọn timezone, self-service hoặc default approval mode hợp lệ.')
+        updated=self.global_settings(user)
+        if 'timezone' in values:
+            try:
+                from zoneinfo import ZoneInfo
+                if not isinstance(values['timezone'],str) or not values['timezone'].strip():raise ValueError()
+                ZoneInfo(values['timezone'].strip())
+            except Exception as exc:raise ValueError('Use a valid IANA time zone, for example Asia/Ho_Chi_Minh.') from exc
+            updated['timezone']=values['timezone'].strip()
+        if 'allow_self_service' in values:
+            if type(values['allow_self_service']) is not bool:raise ValueError('Self-service must be on or off.')
+            updated['allow_self_service']=values['allow_self_service']
+        if 'default_run_mode' in values:
+            if values['default_run_mode'] not in ('default','auto_review'):raise ValueError('New grants can default to Ask for approval or Approve for me.')
+            updated['default_run_mode']=values['default_run_mode']
+        with self.db.atomic():
+            for key,value in updated.items():
+                self.db.execute('INSERT OR REPLACE INTO kei_global_settings VALUES (?,?,?,?)',(key,json.dumps(value),time.time(),str(user)))
+        self.cfg['timezone']=updated['timezone'];self.engine.cfg['timezone']=updated['timezone']
+        self.cfg['allow_self_service']=updated['allow_self_service'];self.engine.cfg['allow_self_service']=updated['allow_self_service']
+        self.cfg['default_execution_mode']=updated['default_run_mode'];self.engine.cfg['default_execution_mode']=updated['default_run_mode']
+        return updated
 
     def person(self, user):
         return self.engine.identity.resolve("discord", str(user))
@@ -306,11 +352,12 @@ class UserExperience:
                     "manage_access": self.access.manager(user, sid),
                     "capabilities": self.engine.tools[sid].capabilities(),
                     "connections": [k for k,v in getattr(self.engine.tools[sid],'cs',{}).items() if v],
-                    "report_preferences": self.engine.reports.settings(user,sid) if self.access.owner(user,sid) else None,
+                    "report_preferences": self.engine.reports.settings(user,sid),
                 }
             )
         return {
             "user": user,
+            "is_bot_owner": user == str(self.cfg["owner_id"]),
             "custom_instructions": personal_instructions(self.db,self.person(user)),
             "persona": persona.mode(self.db, user),
             "debug": self.engine.progress.mode(user),

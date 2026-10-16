@@ -320,12 +320,17 @@ class Kei(LegacyKei):
         await super().on_interaction(interaction)
 
     async def setup_hook(self):
-        from .permissions import policy
         for task in self.store.rows("SELECT * FROM kei_tasks WHERE status='waiting' AND pending IS NOT NULL"):
-            if policy(self.store, self.cfg, task['requester'], task['server'])['level'] != 'read_only':
+            try:
                 pending = json.loads(task['pending'])
-                pending['confirmed'] = True
-                self.store.update_task(task['id'], status='queued', pending=dumps(pending))
+            except (TypeError, ValueError):
+                continue
+            if pending.get('approval_for') == 'owner':
+                pending.pop('approval_for', None)
+                pending.pop('approved_by', None)
+                pending['confirmed'] = False
+                self.store.update_task(task['id'], pending=dumps(pending))
+                self.store.queue(task['channel'], '**Approval needed**\n-# This pending change now needs confirmation from the person who started the task.', confirm_task=task['id'])
         await super().setup_hook()
         await self.bridge.start()
         await self.ux.start()

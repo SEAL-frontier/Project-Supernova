@@ -1,9 +1,14 @@
-# Supernova 3.2.0-rc.3 — feature matrix
+# Supernova 3.2.0-rc.4 — feature matrix
 
 Implemented = a code path with evidence. Partial = an important acceptance gap remains. This is a prerelease; transport mocks are not production proof.
 
 | Feature | Status | Code and evidence | Remaining boundary |
 | --- | --- | --- | --- |
+| Four execution modes; no owner Read only option | Implemented | `permissions.py` exposes only Ask for approval, Approve for me, Full access and Custom; old rows migrate to Ask for approval; dashboard/API regressions; rc.4 is live | Existing legacy rows are normalized on first policy read |
+| Durable Discord dashboard login | Implemented | SQLite session records + server-side rotating OAuth refresh tokens; restart/refresh and CSRF integration tests; production `/login` returns OAuth redirect | Existing rc.3 sessions were memory-only, so one sign-in may be needed after upgrade; browser re-login across a later restart remains unverified |
+| Owner Global Overview | Implemented | Owner-only route aggregates user/channel activity and scoped relationship profiles; test confirms raw message text is never returned and non-owner API calls get 403 | Production page requires owner login; server status is bounded and cached |
+| Owner Global settings | Implemented | Owner-only persisted timezone, server-linking and new-grant defaults with validation and API tests | Existing scoped grants remain unchanged |
+| Personal notification controls | Implemented | Users set their own crash, moderator/admin, recovery and relationship notices; reports remain queryable when DMs are muted | Discord delivery is confirmed by outbox, not guaranteed if the recipient blocks the bot |
 | DM, nickname/direct addressing | Implemented | application.py/social.py; actual Discord conversations inspected | Naturalness needs ongoing feedback |
 | Nearby context, reply ancestry, webhooks | Implemented | conversation.py; default 10 messages, three ancestry steps; real multi-user corpus | Requires history permission; no guild-wide collection |
 | Historical reply/react/status targets | Implemented | Existence/channel/age/own-progress validation, task source retained | Deleted targets degrade gracefully |
@@ -84,8 +89,8 @@ rc.4 adds a regression for a single opted-in gentle followup about an existing r
 
 | Requirement | Status | Evidence / limit |
 |---|---|---|
-| Codex-inspired run-mode cards | Implemented | Distinct Default, Auto-review, Read only, Full access, editable TOML Custom; backend contract tested |
-| Read-only superior approval | Implemented | Owner/host authority checked at confirmation; requester identity unchanged; ordinary admin notifications are not approval cards |
+| Codex-inspired run-mode cards | Implemented | Ask for approval, Approve for me, Full access, interactive Custom; backend contract tested |
+| Legacy Read only mode | Removed | Existing policy rows migrate to Ask for approval; the mode is absent from current controls and cannot be saved |
 | Custom tool/path/command policies | Implemented | Strict TOML validation, actual dispatch enforcement, no scope expansion |
 | Long-running jobs without overall budget pauses | Implemented | Regression exceeds former simple-turn limit; durable cycle state, real freeze reasons; I/O hangs still bounded |
 | Resume same task / preserve receipts | Implemented | Explicit continuation reuses existing task; duplicate-mutation and compaction regressions |

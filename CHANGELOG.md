@@ -1,16 +1,19 @@
 # Changelog
 
-Current public version: **3.2.0-rc.3**. Architecture: **Supernova**.
+Current public version: **3.2.0-rc.4**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
 
-## 3.2.0-rc.3 — Permissions people can actually understand
+## 3.2.0-rc.4 — Owner controls and a dashboard that stays signed in
 
-- Align approval routing with the picker: Ask for approval asks the task starter before every change; Approve for me asks that person only for changes flagged by deterministic risk checks; Read only sends every change to an eligible owner.
-- Rename the scope selector to Access level and show Sandbox (Minecraft server only), Host (SSH user permissions, no automatic sudo) and Root (full machine control).
-- Replace TOML-only Custom configuration with an interactive permission form: per-tool switches, per-tool decision menus, fallback behavior, file path rules, SSH command blocks and lower-priority guidance. The backend still validates and enforces every rule.
-- Clarify Admin access: it applies to the Admin role and controls server view/operation access; owner and host authority stay separate.
-- Make run-mode, access, role and report pickers compact, expandable and animated, with reduced-motion support.
+- Remove the retired **Read only** execution mode entirely. There are four choices: **Custom**, **Approve for me**, **Ask for approval**, and **Full access**. Existing legacy `read_only` rows migrate to the safer task-starter approval mode; owners never need approval from themselves.
+- Keep Discord sign-in across browser visits and service restarts with durable server-side sessions, rotating OAuth refresh tokens, rolling expiry, CSRF checks, and permission revalidation. OAuth tokens stay in the server secret store.
+- Add an owner-only **Global Overview** with aggregate interaction counts, active DM/channel sessions, most active conversations and servers, server/player status, and per-context relationship rank and dimensions. It never returns raw message text.
+- Add owner-only global defaults for timezone, self-service server linking, and the default approval mode for new grants. Existing per-server grants and personal preferences remain independent.
+- Move crash, moderator/admin, recovery, and relationship-rank notices into personal notification settings. Each user can choose their own notices; server reports remain saved and retrievable when DM notifications are muted.
+- Add endpoint regressions for owner-only global routes, aggregate-only overview data, persistent sessions, token refresh, and the four supported execution modes.
+
+This remains a prerelease. Production is running rc.4 with the SQLite database intact, the startup marker verified, and production config/persona/secret hashes unchanged. Live `/` and `/login` return HTTP 200/302, and an unauthenticated `/api/state` returns 401. Existing rc.3 browser sessions were memory-only, so users may need to sign in once after this upgrade; actual interactive re-login and refresh across a later restart still need browser acceptance.
 
 ## 3.1.0-rc.4 — One more message, when you asked for it
 

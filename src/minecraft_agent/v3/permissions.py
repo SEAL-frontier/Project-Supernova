@@ -1,12 +1,15 @@
 """Explicit server/host scope and per-action approval policy; never inferred from SSH presence."""
 import time
 
-LEVELS=('default','auto_review','read_only','full_access','custom')
+LEVELS=('default','auto_review','full_access','custom')
 EXTENTS=('minecraft','host_user','machine')
 
 def install(db):
     db.execute('CREATE TABLE IF NOT EXISTS kei_custom_permissions(subject TEXT,server TEXT,rules TEXT,PRIMARY KEY(subject,server))')
     db.execute('CREATE TABLE IF NOT EXISTS kei_execution_permissions(subject TEXT,server TEXT,extent TEXT,level TEXT,issuer TEXT,updated REAL,PRIMARY KEY(subject,server))')
+    # Legacy Read only never granted more execution authority. Keep existing members
+    # on the safer task-starter approval path, but remove the retired mode entirely.
+    db.execute("UPDATE kei_execution_permissions SET level='default' WHERE level='read_only'")
 
 def static_host(cfg,subject,server):
     profile=next((p for p in cfg['servers'] if p['id']==server),{})
@@ -14,7 +17,9 @@ def static_host(cfg,subject,server):
 
 def policy(db,cfg,subject,server):
     install(db);row=db.one('SELECT * FROM kei_execution_permissions WHERE subject=? AND server=?',(str(subject),server))
-    return row or {'subject':str(subject),'server':server,'extent':'machine' if static_host(cfg,subject,server) else 'minecraft','level':'default','issuer':'operator config','updated':None}
+    fallback=cfg.get('default_execution_mode','default')
+    if fallback not in ('default','auto_review'):fallback='default'
+    return row or {'subject':str(subject),'server':server,'extent':'machine' if static_host(cfg,subject,server) else 'minecraft','level':fallback,'issuer':'operator config','updated':None}
 
 def save(db,cfg,issuer,subject,server,extent,level,has_ssh,rules=None):
     if extent not in EXTENTS or level not in LEVELS:raise ValueError('Chọn phạm vi và mức quyền hợp lệ.')

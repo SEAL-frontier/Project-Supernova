@@ -44,6 +44,19 @@ class Secrets:
             atomic(self.path, json.dumps(data))
         return 'secret:' + name
 
+    def delete(self, name):
+        """Remove a server-side secret reference without exposing its value."""
+        if not re.fullmatch('[A-Za-z0-9_.-]+', str(name)):
+            raise ValueError('Invalid secret name')
+        lock = self._locks.setdefault(str(self.path.resolve()), threading.RLock())
+        with lock:
+            data = self.all()
+            existed = name in data
+            data.pop(name, None)
+            if existed:
+                atomic(self.path, json.dumps(data))
+        return existed
+
     def get(self, ref, default=''):
         if not ref:
             return default

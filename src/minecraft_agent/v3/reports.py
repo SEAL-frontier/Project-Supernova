@@ -51,9 +51,12 @@ class Reports:
         for row in self.db.rows('SELECT user FROM kei_server_owners WHERE server=? AND revoked IS NULL',(server,)):people.add(row['user'])
         return sorted(people)
     def settings(self,user,server):
-        if str(user) not in self.owners(server):raise PermissionError('Chỉ chủ server được chọn báo cáo gửi riêng cho mình.')
+        access=getattr(self.engine,'access',None)
+        if server not in self.engine.servers or not access or server not in access.visible(str(user)):
+            raise PermissionError('Bạn cần quyền truy cập server này để chỉnh thông báo cá nhân.')
         row=self.db.one('SELECT crash,admin,recovery FROM kei_report_preferences WHERE server=? AND user=?',(server,str(user)))
-        return {k:bool(v) for k,v in (row or {'crash':1,'admin':0,'recovery':1}).items()}
+        defaults={'crash':1,'admin':0,'recovery':1} if str(user) in self.owners(server) else {'crash':0,'admin':0,'recovery':0}
+        return {k:bool(v) for k,v in (row or defaults).items()}
     def update(self,user,server,values):
         current=self.settings(user,server)
         if not isinstance(values,dict) or not set(values)<=set(current) or any(type(v)!=bool for v in values.values()):raise ValueError('Chọn bật hoặc tắt cho từng loại thông báo.')
@@ -66,9 +69,15 @@ class Reports:
             changed=self.db.execute('INSERT OR IGNORE INTO kei_reports VALUES (?,?,?,?,?,?,?,?)',(ident,server,kind,str(subject),summary,task,time.time(),key)).rowcount
             if not changed:return None
             if notify:
-                for owner in self.owners(server):
-                    if kind in self.settings(owner,server) and self.settings(owner,server)[kind]:
-                        self.db.queue(owner,'**'+self.engine.servers[server].get('name',server)+'** · '+summary+'\n-# Đã lưu báo cáo. Có thể hỏi lại Kei hoặc đổi thông báo trong mục Người có quyền.')
+                candidates=set(self.owners(server))
+                candidates.update(r['subject'] for r in self.db.rows("SELECT subject FROM kei_grants WHERE server=? AND level IN ('observe','copilot')",(server,)))
+                candidates.update(r['user'] for r in self.db.rows('SELECT user FROM kei_server_admins WHERE server=? AND revoked IS NULL',(server,)))
+                candidates.update(r['user'] for r in self.db.rows('SELECT user FROM kei_server_owners WHERE server=? AND revoked IS NULL',(server,)))
+                candidates.update(str(user) for user,servers in self.engine.cfg.get('assignments',{}).items() if server in servers)
+                for user in sorted(candidates):
+                    try:enabled=self.settings(user,server).get(kind,False)
+                    except PermissionError:continue
+                    if enabled:self.db.queue(user,'**'+self.engine.servers[server].get('name',server)+'** · '+summary+'\n-# Đã lưu báo cáo. Có thể hỏi lại Kei hoặc đổi thông báo trong mục Notifications.')
         return ident
     def recent(self,user,server,limit=8):
         access=getattr(self.engine,'access',None)
@@ -84,7 +93,9 @@ class Reports:
             if not old_notice:groups.setdefault((task['server'],task['channel'],task['requester']),[]).append(task)
         for (server,channel,requester),tasks in groups.items():
             # Preferences govern automatic recovery notices too. Persisted report remains queryable.
-            if requester in self.owners(server) and not self.settings(requester,server)['recovery']:continue
+            try:enabled=self.settings(requester,server)['recovery']
+            except PermissionError:enabled=False
+            if not enabled:continue
             self.db.queue(channel,'-# '+str(len(tasks))+' việc trên '+self.engine.servers[server].get('name',server)+' cần kiểm tra lại sau khi Kei bị ngắt. Tiến độ đã lưu; chưa tự chạy lại thay đổi.')
     def monitor_sample(self,server,status,resources,limit,now=None):
         now=time.time() if now is None else now

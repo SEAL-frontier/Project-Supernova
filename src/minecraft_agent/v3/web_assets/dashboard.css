@@ -23,3 +23,6 @@
 @media(prefers-reduced-motion:reduce){.picker-body,.choice-options,.picker-chevron,.switch,.switch:after{transition:none!important}}
 details::details-content{block-size:0;overflow:clip;transition:block-size .35s cubic-bezier(.2,.8,.2,1),content-visibility .35s allow-discrete}
 details[open]::details-content{block-size:auto}
+
+#global-metrics.stats{grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}#global-metrics .stat{min-width:0;padding:15px;border:1px solid var(--line);border-radius:16px;background:#fffafc}.stat .item-title{overflow-wrap:anywhere}
+@media(max-width:720px){#global-metrics.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}

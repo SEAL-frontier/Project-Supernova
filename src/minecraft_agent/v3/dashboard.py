@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import json
 import logging
 import secrets
 import time
@@ -82,10 +83,39 @@ class OAuthClient:
                 )
             result = await response.json()
         token = result.get("access_token")
-        if not token:
+        refresh = result.get("refresh_token")
+        if not token or not refresh:
             raise PermissionError("Discord không cấp session đăng nhập.")
         user, guilds = await self.identity(token)
-        return user, guilds, token
+        return user, guilds, {
+            "access_token": token,
+            "refresh_token": refresh,
+            "expires_at": time.time() + max(60, int(result.get("expires_in", 3600))),
+        }
+
+    async def refresh(self, refresh_token):
+        http = await self.client()
+        async with http.post(
+            DISCORD + "/oauth2/token",
+            data={
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
+        ) as response:
+            if response.status != 200:
+                raise PermissionError("Discord session expired; sign in again.")
+            result = await response.json()
+        access = result.get("access_token")
+        rotated = result.get("refresh_token") or refresh_token
+        if not access:
+            raise PermissionError("Discord did not renew the session.")
+        return {
+            "access_token": access,
+            "refresh_token": rotated,
+            "expires_at": time.time() + max(60, int(result.get("expires_in", 3600))),
+        }
 
     async def close(self):
         if self.http is not None:
@@ -96,9 +126,9 @@ class Dashboard:
     def __init__(self, ux, oauth=None, clock=time.time):
         self.ux, self.cfg, self.clock = ux, ux.cfg.get("web", {}), clock
         self.oauth = oauth
+        self.db = ux.db
         self.runner = None
         self.site = None
-        self.sessions = {}
         self.states = {}
         self.origin = ""
         self.secure = True
@@ -106,6 +136,7 @@ class Dashboard:
         self.auth_ready = False
         self.setup_message = "Web login is not ready: the operator must configure Discord OAuth. You can still use /setup and /settings in Discord."
         self.branding = None
+        self.global_live_cache = (0, [])
 
     def configure(self):
         url = str(self.cfg.get("public_url", "")).rstrip("/")
@@ -183,6 +214,9 @@ class Dashboard:
         app.router.add_get("/login", self.login)
         app.router.add_get("/oauth/callback", self.callback)
         app.router.add_get("/api/state", self.state)
+        app.router.add_get("/api/global/overview", self.global_overview)
+        app.router.add_get("/api/global/settings", self.global_settings)
+        app.router.add_post("/api/global/settings", self.update_global_settings)
         app.router.add_get("/api/profile", self.profile)
         app.router.add_get("/api/memories", self.memories)
         app.router.add_get("/api/reports", self.reports)
@@ -231,16 +265,35 @@ class Dashboard:
         if self.oauth:
             await self.oauth.close()
         self.states.clear()
-        self.sessions.clear()
 
     def prune(self):
         now = self.clock()
         self.states = {k: v for k, v in self.states.items() if v["expires"] > now}
-        self.sessions = {k: v for k, v in self.sessions.items() if v["expires"] > now}
         while len(self.states) >= 128:
             self.states.pop(next(iter(self.states)))
-        while len(self.sessions) >= 256:
-            self.sessions.pop(next(iter(self.sessions)))
+        expired = self.db.rows("SELECT session_hash,token_ref FROM kei_web_sessions WHERE expires<=?", (now,))
+        for row in expired:
+            self._drop_session(row["session_hash"], row["token_ref"])
+
+    def _secrets(self):
+        return Secrets(self.ux.cfg.get("secrets_file", "data/secrets.json"))
+
+    def _drop_session(self, key, token_ref=None):
+        row = self.db.one("SELECT token_ref FROM kei_web_sessions WHERE session_hash=?", (key,))
+        self.db.execute("DELETE FROM kei_web_sessions WHERE session_hash=?", (key,))
+        token_ref = token_ref or (row or {}).get("token_ref")
+        if token_ref and str(token_ref).startswith("secret:"):
+            self._secrets().delete(str(token_ref)[7:])
+
+    def _store_session(self, sid, session):
+        key = hashlib.sha256(sid.encode()).hexdigest()
+        self.db.execute(
+            "INSERT OR REPLACE INTO kei_web_sessions VALUES (?,?,?,?,?,?,?,?,?)",
+            (key, session["user"], session["name"], session["csrf"], session["token_ref"],
+             json.dumps(session["guilds"], separators=(",", ":")), session["expires"],
+             session["checked"], session.get("touched", self.clock())),
+        )
+        return key
 
     async def login(self, request):
         if not self.auth_ready:
@@ -298,23 +351,25 @@ class Dashboard:
         binding = hashlib.sha256(request.cookies.get("kei_oauth", "").encode()).hexdigest()
         if not saved or not code or not secrets.compare_digest(saved["binding"], binding):
             raise PermissionError("Lượt đăng nhập hết hạn hoặc không hợp lệ; mở /login lại nhé.")
-        user, guilds, token = await self.oauth.exchange(code, saved["verifier"])
+        user, guilds, tokens = await self.oauth.exchange(code, saved["verifier"])
         sid = secrets.token_urlsafe(32)
-        self.sessions[hashlib.sha256(sid.encode()).hexdigest()] = {
+        token_ref = self._secrets().put("web_session_" + secrets.token_hex(20), json.dumps(tokens))
+        self._store_session(sid, {
             "user": str(user["id"]),
             "name": str(user.get("global_name") or user.get("username") or user["id"]),
             "guilds": guilds,
-            "token": token,
+            "token_ref": token_ref,
             "csrf": secrets.token_urlsafe(32),
-            "expires": self.clock() + 3600,
+            "expires": self.clock() + 90 * 86400,
             "checked": self.clock(),
-        }
+            "touched": self.clock(),
+        })
         response = web.Response(status=302, headers={"Location": "/"})
         response.del_cookie("kei_oauth", path="/")
         response.set_cookie(
             "kei_session",
             sid,
-            max_age=3600,
+            max_age=365 * 86400,
             httponly=True,
             secure=self.secure,
             samesite="Lax",
@@ -327,9 +382,10 @@ class Dashboard:
             raise web.HTTPServiceUnavailable(text=self.setup_message)
         self.prune()
         sid = hashlib.sha256(request.cookies.get("kei_session", "").encode()).hexdigest()
-        session = self.sessions.get(sid)
-        if not session:
+        row = self.db.one("SELECT * FROM kei_web_sessions WHERE session_hash=? AND expires>?", (sid, self.clock()))
+        if not row:
             raise web.HTTPUnauthorized(text="Đăng nhập Discord trước nhé.")
+        session = {**row, "guilds": json.loads(row["guilds"])}
         if write:
             if request.headers.get("Origin") != self.origin or not secrets.compare_digest(
                 session["csrf"], request.headers.get("X-CSRF-Token", "")
@@ -337,13 +393,28 @@ class Dashboard:
                 raise PermissionError("Phiên thao tác chưa hợp lệ. Tải lại trang rồi thử lại.")
             if request.content_type != "application/json":
                 raise ValueError("Gửi JSON hợp lệ.")
-        # Discord permissions are refreshed before every privileged write, not browser-supplied.
+        # Keep sign-in across app restarts. Refresh the server-side OAuth grant when
+        # needed and re-check Discord identity/permissions before privileged writes.
+        tokens = json.loads(self._secrets().get(session["token_ref"], "{}"))
+        if not tokens.get("access_token") or not tokens.get("refresh_token"):
+            self._drop_session(sid, session["token_ref"])
+            raise web.HTTPUnauthorized(text="Discord session expired; sign in again.")
+        if float(tokens.get("expires_at", 0)) <= self.clock() + 300:
+            try:
+                tokens = await self.oauth.refresh(tokens["refresh_token"])
+            except PermissionError:
+                self._drop_session(sid, session["token_ref"])
+                raise web.HTTPUnauthorized(text="Discord session expired; sign in again.")
+            self._secrets().put(session["token_ref"][7:], json.dumps(tokens))
         if write or self.clock() - session["checked"] > 300:
-            user, guilds = await self.oauth.identity(session["token"])
+            user, guilds = await self.oauth.identity(tokens["access_token"])
             if str(user["id"]) != session["user"]:
-                self.sessions.pop(sid, None)
+                self._drop_session(sid, session["token_ref"])
                 raise PermissionError("Danh tính Discord đã thay đổi; đăng nhập lại.")
             session.update(guilds=guilds, checked=self.clock())
+        if self.clock() - float(session.get("touched", 0)) > 86400:
+            session.update(expires=self.clock() + 90 * 86400, touched=self.clock())
+        self._store_session(request.cookies.get("kei_session", ""), session)
         return session
 
     def guilds(self, session):
@@ -394,6 +465,133 @@ class Dashboard:
                     if grant.get('issuer') and str(grant['issuer']).isdigit():grant['grantor']=await self.ux.public_person(grant['issuer'],server['id'])
         result.update(name=session["name"], csrf=session["csrf"], guilds=self.guilds(session))
         return web.json_response(result)
+
+    def require_bot_owner(self, session):
+        if str(session.get('user')) != str(self.ux.cfg.get('owner_id')):
+            raise PermissionError('This page is available to the configured bot owner only.')
+
+    async def global_settings(self,request):
+        session=await self.session(request)
+        self.require_bot_owner(session)
+        return web.json_response(self.ux.global_settings(session['user']))
+
+    async def update_global_settings(self,request):
+        session=await self.session(request,True)
+        self.require_bot_owner(session)
+        return web.json_response(self.ux.update_global_settings(session['user'],await request.json()))
+
+    async def _global_live_servers(self):
+        now=self.clock()
+        cached_at,cached=self.global_live_cache
+        if now-cached_at<30:return cached
+        servers=list(self.ux.engine.servers.items())[:20]
+        async def inspect(sid,profile):
+            executor=self.ux.engine.tools.get(sid)
+            result={'id':sid,'name':profile.get('name',sid),'state':'Not checked','players':None,
+                    'connectors':sorted(k for k,v in getattr(executor,'cs',{}).items() if v) if executor else []}
+            try:caps=executor.capabilities() if executor else []
+            except Exception:caps=[]
+            if not executor or 'status' not in caps:return result
+            try:
+                receipt=await asyncio.wait_for(asyncio.to_thread(executor.do_inspect,'status'),timeout=5)
+                data=(receipt or {}).get('data') or {}
+                result['state']=str(data.get('state') or 'Status returned without a state')[:80]
+                players=data.get('players',data.get('players_online'))
+                if isinstance(players,list):result['players']=len(players)
+                if isinstance(players,list):result['player_names']=[str(p.get('name') or p.get('username')) if isinstance(p,dict) else str(p) for p in players[:30]]
+                elif isinstance(players,dict):
+                    online=players.get('online',players.get('count'))
+                    if isinstance(online,int):result['players']=max(0,online)
+                    names=players.get('sample') or players.get('list') or []
+                    if isinstance(names,list):result['player_names']=[str(p.get('name') or p.get('username')) if isinstance(p,dict) else str(p) for p in names[:30]]
+                elif isinstance(players,int):result['players']=max(0,players)
+                if result['players'] is None and 'players' in caps and result['state'].casefold() in ('running','online','active'):
+                    player_receipt=await asyncio.wait_for(asyncio.to_thread(executor.do_inspect,'players'),timeout=4)
+                    output=str((player_receipt or {}).get('stdout') or (player_receipt or {}).get('console_output') or '')
+                    match=__import__('re').search(r'(?:there are\s+)?(\d+)\s+(?:of\s+a\s+max\s+\d+\s+)?players? online\s*:?[ ]*(.*)',output,__import__('re').I)
+                    if match:
+                        result['players']=int(match.group(1));result['player_names']=[name.strip() for name in match.group(2).split(',') if name.strip()][:30]
+            except asyncio.TimeoutError:result['state']='Check timed out'
+            except Exception as exc:result['state']='Check failed · '+type(exc).__name__
+            return result
+        results=await asyncio.gather(*(inspect(sid,profile) for sid,profile in servers))
+        self.global_live_cache=(now,results)
+        return results
+
+    async def global_overview(self,request):
+        session=await self.session(request)
+        self.require_bot_owner(session)
+        db=self.ux.db;now=self.clock();cutoff=now-15*60
+        activity=db.rows("SELECT user,scope,count(*) message_count,max(at) last_at FROM kei_messages WHERE role='user' AND forgotten=0 GROUP BY user,scope ORDER BY last_at DESC")
+        by_user={};by_scope={}
+        for row in activity:
+            uid=str(row['user']);scope=str(row['scope'])
+            user=by_user.setdefault(uid,{'id':uid,'message_count':0,'last_at':0,'sessions':[]})
+            user['message_count']+=int(row['message_count']);user['last_at']=max(user['last_at'],float(row['last_at'] or 0))
+            user['sessions'].append({'scope':scope,'message_count':int(row['message_count']),'last_at':float(row['last_at'] or 0),'active':float(row['last_at'] or 0)>=cutoff})
+            scope_data=by_scope.setdefault(scope,{'scope':scope,'message_count':0,'last_at':0,'people':set()})
+            scope_data['message_count']+=int(row['message_count']);scope_data['last_at']=max(scope_data['last_at'],float(row['last_at'] or 0));scope_data['people'].add(uid)
+        totals={'people':len(by_user),'messages':sum(x['message_count'] for x in by_user.values()),
+                'active_dms':sum(1 for s in by_scope.values() if s['scope'].startswith('dm:') and s['last_at']>=cutoff),
+                'active_channels':sum(1 for s in by_scope.values() if s['scope'].startswith('guild:') and s['last_at']>=cutoff)}
+        people_rows={str(r['user_id']):r for r in db.rows('SELECT user_id,username,global_name,account_display FROM kei_users')}
+        guild_to_server={str(guild):sid for sid,p in self.ux.engine.servers.items() for guild in p.get('guilds',[])}
+        def scope_label(scope):
+            parts=scope.split(':')
+            if parts[0]=='dm':return 'DM · '+(people_rows.get(parts[1],{}).get('global_name') or people_rows.get(parts[1],{}).get('username') or parts[1])
+            if parts[0]=='guild' and len(parts)>=3:
+                sid=guild_to_server.get(parts[1]);server=self.ux.engine.servers.get(sid,{}) if sid else {}
+                channel=self.ux.bot.get_channel(int(parts[2])) if str(parts[2]).isdigit() and hasattr(self.ux.bot,'get_channel') else None
+                return (server.get('name')+' · ' if server else 'Discord · ')+('#'+getattr(channel,'name',parts[2]))
+            return scope[:100]
+        active=[];server_totals={}
+        for value in by_scope.values():
+            parts=value['scope'].split(':')
+            if parts[0]=='guild' and len(parts)>1:
+                sid=guild_to_server.get(parts[1])
+                if sid:server_totals[sid]=server_totals.get(sid,0)+value['message_count']
+        for value in sorted((x for x in by_scope.values() if x['last_at']>=cutoff),key=lambda x:x['last_at'],reverse=True)[:30]:
+            ids=sorted(value['people'],key=lambda uid:by_user[uid]['last_at'],reverse=True)[:8]
+            active.append({'scope':value['scope'],'label':scope_label(value['scope']),'messages':value['message_count'],'last_at':value['last_at'],
+                           'people':[{'id':uid,'display_name':(people_rows.get(uid,{}) or {}).get('global_name') or (people_rows.get(uid,{}) or {}).get('account_display') or (people_rows.get(uid,{}) or {}).get('username') or uid} for uid in ids]})
+        dms=sorted((x for x in by_scope.values() if x['scope'].startswith('dm:')),key=lambda x:x['message_count'],reverse=True)
+        public=sorted((x for x in by_scope.values() if x['scope'].startswith('guild:')),key=lambda x:x['message_count'],reverse=True)
+        totals['most_active_dm']=scope_label(dms[0]['scope']) if dms else 'None yet'
+        busiest=max(server_totals,key=server_totals.get) if server_totals else None
+        totals['most_active_server']=self.ux.engine.servers[busiest].get('name',busiest) if busiest else (scope_label(public[0]['scope']) if public else 'None yet')
+        query=request.query.get('search','').strip().casefold()
+        search_rows=[]
+        for uid,data in by_user.items():
+            person=people_rows.get(uid,{})
+            display=person.get('global_name') or person.get('account_display') or person.get('username') or uid
+            username=person.get('username') or ''
+            if query and query not in (display+' '+username+' '+uid).casefold():continue
+            data['display_name']=display;data['username']=username;data['active']=data['last_at']>=cutoff
+            data['sessions']=[{'label':scope_label(s['scope']),'messages':s['message_count'],'active':s['active'],'last_at':s['last_at']} for s in sorted(data['sessions'],key=lambda x:x['last_at'],reverse=True)[:8]]
+            person_key=self.ux.person(uid) if uid.isdigit() else None
+            account=self.ux.bot.get_user(int(uid)) if uid.isdigit() and hasattr(self.ux.bot,'get_user') else None
+            avatar_url=str(account.display_avatar.url) if account else None
+            if avatar_url and not (urlsplit(avatar_url).scheme=='https' and urlsplit(avatar_url).hostname=='cdn.discordapp.com'):avatar_url=None
+            relationship_scopes=set()
+            if person_key:
+                relationship_scopes.update(r['scope'] for r in db.rows('SELECT scope FROM kei_relationships WHERE person=?',(person_key,)))
+                relationship_scopes.update(r['scope'] for r in db.rows('SELECT scope FROM kei_relationship_ranks WHERE person=?',(person_key,)))
+            relations=[]
+            for scope in sorted(relationship_scopes,key=lambda s:by_scope.get(s,{}).get('last_at',0),reverse=True)[:8]:
+                profile=self.ux.engine.memory.relationship(person_key,scope)
+                rank=profile.get('rank') or {}
+                relations.append({'scope':scope_label(scope),'rank':rank.get('label','Neutral'),
+                                  'dimensions':{k:float(profile.get(k,0) or 0) for k in ('familiarity','trust','warmth','playfulness','tension','interaction_frequency','confidence')}})
+            data['avatar_url']=avatar_url;data['relationships']=relations
+            search_rows.append(data)
+        search_rows.sort(key=lambda x:(x['message_count'],x['last_at']),reverse=True)
+        try:offset=max(0,int(request.query.get('offset','0')))
+        except ValueError:offset=0
+        limit=25;page=search_rows[offset:offset+limit]
+        for user in page:user['sessions']=[{**s} for s in user['sessions']]
+        servers=await self._global_live_servers()
+        return web.json_response({'totals':totals,'active_sessions':active,'servers':servers,'users':page,
+                                  'next_offset':offset+limit if offset+limit<len(search_rows) else None})
 
     async def profile(self, request):
         session = await self.session(request)
@@ -616,9 +814,9 @@ class Dashboard:
         )
 
     async def logout(self, request):
-        await self.session(request, True)
+        session = await self.session(request, True)
         key = hashlib.sha256(request.cookies.get("kei_session", "").encode()).hexdigest()
-        self.sessions.pop(key, None)
+        self._drop_session(key, session["token_ref"])
         response = web.json_response({"ok": True})
         response.del_cookie("kei_session", path="/")
         return response
