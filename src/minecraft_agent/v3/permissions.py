@@ -47,11 +47,14 @@ def validate_custom(value):
         except tomllib.TOMLDecodeError as exc:raise ValueError('Invalid TOML: '+str(exc)) from exc
     if not isinstance(value,dict) or not value:raise ValueError('Custom needs at least one explicit rule.')
     if 'tools' not in value:value={'tools':value}
-    if set(value)-{'tools','paths','shell'}:raise ValueError('Supported Custom sections: tools, paths, shell.')
+    if set(value)-{'tools','paths','shell','instructions'}:raise ValueError('Supported Custom sections: tools, paths, shell, and instructions.')
     tools=value.get('tools',{})
     names={'*','inspect','power','console','files','plugin_install','remote_shell','plugin_search','fetch_url','web_search','profiler','verify_action','find_server_files','task_evidence'}
-    if not isinstance(tools,dict) or not tools or not set(tools)<=names or any(v not in ('allow','deny','auto_review','ask') for v in tools.values()):raise ValueError('Each tool rule must be allow, deny or auto_review.')
-    out={'tools':{k:('auto_review' if v=='ask' else v) for k,v in tools.items()}}
+    if not isinstance(tools,dict) or not tools or not set(tools)<=names or any(v not in ('allow','deny','auto_review','ask') for v in tools.values()):raise ValueError('Each tool must be set to Allow, Block, Ask the task starter, or Kei reviews changes.')
+    out={'tools':dict(tools)}
+    instructions=value.get('instructions','')
+    if not isinstance(instructions,str) or len(instructions)>3000 or '\x00' in instructions:raise ValueError('Custom guidance must be plain text up to 3,000 characters.')
+    out['instructions']=instructions.strip()
     for section in ('paths','shell'):
         values=value.get(section,{})
         if not isinstance(values,dict) or set(values)-{'allow','deny'}:raise ValueError(section+' supports only allow and deny lists.')
@@ -62,7 +65,13 @@ def validate_custom(value):
 
 def custom_text(config):
     import json
-    return '\n\n'.join('['+section+']\n'+'\n'.join(json.dumps(k)+' = '+json.dumps(v) for k,v in values.items()) for section,values in config.items() if values)
+    lines=[]
+    if config.get('instructions'):lines.append('instructions = '+json.dumps(config['instructions'],ensure_ascii=False))
+    for section,values in config.items():
+        if section=='instructions' or not values:continue
+        lines.extend(['','['+section+']'])
+        lines.extend(json.dumps(k,ensure_ascii=False)+' = '+json.dumps(v,ensure_ascii=False) for k,v in values.items())
+    return '\n'.join(lines)
 
 def custom_block(db,cfg,subject,server,name,args):
     import fnmatch

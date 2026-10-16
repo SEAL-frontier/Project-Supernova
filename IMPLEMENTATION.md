@@ -1,4 +1,4 @@
-# Supernova 3.2.0-rc.2 — acceptance
+# Supernova 3.2.0-rc.3 — acceptance
 
 This round extends the existing architecture and preserves private persona/data. See FEATURE_MATRIX.md for implemented/partial boundaries.
 
@@ -15,3 +15,6 @@ The installed production plugin was verified by hash/logs, rather than assumed. 
 Source-backed relationship frequency/ranks, atomic reflection, scoped profile UI, validated historical delivery, explicit local capabilities, scheduled agent execution and optional decision adapters are implemented. Direct chat retains one-pass generation where possible. Jev is contract-compatible but not live tested. OAuth tests use a fixture issuer; separate production acceptance completed actual Discord consent, callback and operator-only dashboard/profile reads. This did not change stored preferences or send Discord messages.
 
 Back up SQLite/config before additive migrations. Run one Discord consumer. Keep deployed persona/credentials intact. Public persona/env/test placeholders stay blank; operator acceptance data stays private. Scheduled work rechecks permissions and retains ordinary dangerous-step approval. Native Linux local-process control outside a container, full mixed-OS networking, broad proactive repair policies and sustained social/novice acceptance remain open.
+
+
+Permission UX update for rc.3: Ask for approval asks the task starter before each change; Approve for me asks the task starter for changes flagged by deterministic risk checks; Read only asks an authorized owner. Custom settings are editable without TOML and remain server-side enforced. The run-mode panel and other permission selectors now collapse/expand.

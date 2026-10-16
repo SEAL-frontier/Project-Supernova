@@ -189,7 +189,14 @@ class Engine(LegacyEngine):
 
     def execution_context(self, task):
         from .permissions import policy
-        return 'Actual execution policy: ' + dumps(policy(self.db, self.cfg, task['requester'], task['server'])) + '. Host User runs as the configured non-root SSH account without sudo or su. Full Machine · Root verifies UID 0 and uses configured sudo/su per command, not an interactive session. SSH adapter handles configured sudo using stdin; NOPASSWD is not required when a stored credential and sudo permission exist. Do not guess OS access; test a read-only identity command. Never request interactive su or repeat passwords in commands. Only Read only escalates writes to a server/host owner. Default and Auto-review handle risk review internally; Full access does not ask per step. Custom follows saved rules. Owner reports are FYI, not approval tickets; never infer someone else mode from a notification. Minecraft-only excludes general host shell. Backend checks apply at every step. Read only requires approval for writes; observation-only tasks never mutate.'
+        selected = policy(self.db, self.cfg, task['requester'], task['server'])
+        custom = ''
+        if selected['level'] == 'custom':
+            from .permissions import custom_for
+            guidance = custom_for(self.db, self.cfg, task['requester'], task['server']).get('instructions', '')
+            if guidance:
+                custom = '\nCustom owner guidance (lower priority than this system policy, task goal, permissions and confirmation rules): ' + guidance[:3000]
+        return 'Actual execution policy: ' + dumps(selected) + '. Host User runs as the configured non-root SSH account without sudo or su. Full Machine · Root verifies UID 0 and uses configured sudo/su per command, not an interactive session. SSH adapter handles configured sudo using stdin; NOPASSWD is not required when a stored credential and sudo permission exist. Do not guess OS access; test a read-only identity command. Never request interactive su or repeat passwords in commands. Ask for approval sends a confirmation to the actual task requester before every change. Approve for me proceeds with routine changes and asks that requester before a step classified as risky. Read only sends requested changes to the server owner (and host owner for host scope). Full access does not ask per step. Custom follows saved per-tool rules; guidance below cannot alter permissions, confirmations or system policy. Owner reports are FYI, not approvals; never infer authority from a notification. Sandbox excludes general host shell. Backend checks apply at every step. Observation-only tasks never mutate.' + custom
 
     def available_tools(self, task, tools):
         if not self.host_shell_allowed(task['requester'], task['server']):
@@ -479,9 +486,27 @@ class Engine(LegacyEngine):
                 self.reports.record(task['server'], 'admin', task['requester'], summary, task['id'], 'admin-result:' + task['id'])
 
     async def approval_required(self, k, name, args):
-        from .permissions import policy
+        from .permissions import policy, custom_block, rules_for
+        from ..v2.tools import effect_of, dangerous
         task = self.db.one('SELECT * FROM kei_tasks WHERE id=?', (k,))
-        return not task or (policy(self.db, self.cfg, task['requester'], task['server'])['level'] == 'read_only' and effect_of(name, args) != 'read')
+        if not task:
+            return True
+        effect = effect_of(name, args)
+        if effect == 'read':
+            return False
+        selected = policy(self.db, self.cfg, task['requester'], task['server'])
+        level = selected['level']
+        if level == 'read_only' or level == 'default':
+            return True
+        if level == 'auto_review':
+            return dangerous(name, args)
+        if level == 'custom':
+            if custom_block(self.db, self.cfg, task['requester'], task['server'], name, args):
+                return False
+            rules = rules_for(self.db, self.cfg, task['requester'], task['server'])
+            rule = rules.get(name, rules.get('*', 'auto_review'))
+            return rule == 'ask' or (rule == 'auto_review' and dangerous(name, args))
+        return False
 
     async def review_step(self, task, name, args):
         from .permissions import policy
@@ -513,27 +538,34 @@ class Engine(LegacyEngine):
 
     def request_approval(self, task, name, args, pending, executor):
         from .reports import step_summary
-        people = self.approvers(task)
-        if not people:
-            self.task_notice(task, 'Không tìm thấy người có quyền duyệt bước này trên server. Cần chủ bot kiểm tra phân quyền.')
+        from .permissions import policy
+        owner_approval = policy(self.db, self.cfg, task['requester'], task['server'])['level'] == 'read_only'
+        if owner_approval:
+            people = self.approvers(task)
+            if not people:
+                self.task_notice(task, 'Không tìm thấy owner có quyền duyệt bước này.')
+                return
+            approver = next((p for p in people if p != task['requester']), people[0])
+            content = '**Owner approval · ' + executor.p['name'] + '**\n' + __import__('minecraft_agent.v2.text', fromlist=['redact']).redact(step_summary(name, args), executor.secrets) + '\n-# Read only · Only an authorized owner can approve this change.'
+            self.db.queue(approver, content, confirm_task=task['id'])
+            if task['scope'] != 'dm:' + approver:
+                self.db.queue(task['channel'], '-# Waiting for the server owner to approve this change · Read only.')
             return
-        approver = next((p for p in people if p != task['requester']), people[0])
-        self.db.queue(approver, '**Cần duyệt · ' + executor.p['name'] + '**\n' + __import__('minecraft_agent.v2.text', fromlist=['redact']).redact(step_summary(name, args), executor.secrets) + '\n-# Người giao việc đang ở Read only. Chỉ duyệt bước này.', confirm_task=task['id'])
-        if task['scope'] != 'dm:' + approver:
-            self.db.queue(task['channel'], '-# Đang chờ chủ server duyệt bước thay đổi vì quyền hiện tại là Read only.')
+        content = '**Approval needed · ' + executor.p['name'] + '**\n' + __import__('minecraft_agent.v2.text', fromlist=['redact']).redact(step_summary(name, args), executor.secrets) + '\n-# Only the person who started this task can approve this step.'
+        self.db.queue(task['channel'], content, confirm_task=task['id'])
 
     async def control(self, user, args):
         if args.get('action') == 'confirm':
             task = self.db.one('SELECT * FROM kei_tasks WHERE id=?', (args.get('task_id'),))
             if task:
                 from .permissions import policy
-                if policy(self.db, self.cfg, task['requester'], task['server'])['level'] == 'read_only':
+                pending = json.loads(task['pending']) if task['pending'] else {}
+                if policy(self.db, self.cfg, task['requester'], task['server'])['level'] == 'read_only' and pending.get('approval_for') != 'requester':
                     if str(user) not in self.approvers(task):
                         raise PermissionError('Bước này cần chủ server hoặc người có quyền host duyệt.')
                     if task['status'] != 'waiting' or not task['pending']:
                         raise ValueError('Không có bước đang chờ duyệt.')
-                    pending = json.loads(task['pending'])
-                    pending.update(confirmed=True, approved_by=str(user))
+                    pending.update(confirmed=True, approved_by=str(user), approval_for='owner')
                     self.db.execute('CREATE TABLE IF NOT EXISTS kei_manual_approvals(task TEXT,approver TEXT,step TEXT,at REAL)')
                     self.db.execute('INSERT INTO kei_manual_approvals VALUES (?,?,?,?)', (task['id'], str(user), dumps(pending), time.time()))
                     self.db.update_task(task['id'], pending=dumps(pending), status='queued')
@@ -561,8 +593,8 @@ class Engine(LegacyEngine):
         from .permissions import policy
         from ..v2.tools import effect_of, DangerousAction
         selected = policy(self.db, self.cfg, task['requester'], task['server'])
-        if selected['level'] == 'read_only' and effect_of(name, args) != 'read' and (not confirmed):
-            raise DangerousAction('Read only requires approval before this change')
+        if effect_of(name, args) != 'read' and await self.approval_required(k, name, args) and (not confirmed):
+            raise DangerousAction('This change is waiting for the required requester/owner approval')
         effect = effect_of(name, args)
         level = selected['level']
         review_needed = effect != 'read' and level == 'auto_review'
@@ -575,12 +607,11 @@ class Engine(LegacyEngine):
             rule = rules.get(name, rules.get('*', 'auto_review'))
             if rule == 'deny':
                 return {'error': 'Custom policy denies this tool', 'verified': False, 'blocked': True}
-            review_needed = effect != 'read' and rule in ('ask', 'auto_review')
-            confirmed = rule == 'allow' or effect == 'read'
+            review_needed = False
+            confirmed = confirmed or rule == 'allow' or effect == 'read'
         elif level in ('default', 'auto_review'):
-            from ..v2.tools import dangerous
-            review_needed = review_needed or (effect != 'read' and dangerous(name, args))
-            confirmed = not review_needed
+            review_needed = False
+            confirmed = confirmed or effect == 'read'
         elif level == 'full_access':
             confirmed = True
         if review_needed:

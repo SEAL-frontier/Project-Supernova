@@ -1,4 +1,4 @@
-# Supernova 3.2.0-rc.2 — feature matrix
+# Supernova 3.2.0-rc.3 — feature matrix
 
 Implemented = a code path with evidence. Partial = an important acceptance gap remains. This is a prerelease; transport mocks are not production proof.
 
@@ -93,3 +93,16 @@ rc.4 adds a regression for a single opted-in gentle followup about an existing r
 | Follow-up replies/reactions | Implemented; field feedback ongoing | Same-person recent reply window; cheap acknowledgments; bystander and quiet boundaries retained |
 | English Web UI | Implemented | Real local browser flow plus production delivery checked in operator acceptance report |
 | Production/Minecraft acceptance | Scoped | Real SSH identities, live Panel/bridge/model checks; no destructive admin action run solely as a test |
+
+
+## 3.2.0-rc.3 permissions UX and routing
+
+| Requirement | Status | Evidence / limit |
+|---|---|---|
+| Ask for approval routes to task starter for every write | Implemented | V3 approval gate and requester-only confirm path; regression test added. |
+| Approve for me routes flagged-risk writes to task starter | Implemented | Deterministic `dangerous()` gate; ordinary writes continue without a prompt. |
+| Read only routes writes to eligible owner | Implemented | Owner authority checked at confirm; requester cannot self-approve. |
+| Sandbox / Host / Root scope labels | Implemented | Dashboard labels retain existing backend extent values and connector checks. |
+| Custom permission form without TOML | Implemented | Per-tool switches/menus, path and command patterns, guidance; backend validates before storage/dispatch. |
+| Animated compact dropdowns and collapsible run mode | Implemented | Dashboard HTML/CSS/JS with keyboard controls and reduced-motion fallback. |
+| Browser/device visual acceptance | Pending | Source checks and local browser pass remain required before release. |

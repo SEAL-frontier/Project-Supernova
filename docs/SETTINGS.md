@@ -119,24 +119,31 @@ Say “Kei, từ giờ gọi mình là anh” or add text in **Trò chuyện →
 
 The new banner is user-supplied Tendou Kei / Blue Archive fan art credited to kita (kitairoha); artwork and characters retain their creators' rights. The MIT license covers project code, not third-party artwork.
 
-## Execution permissions (rc.3)
+## Server access and run modes (3.2.0-rc.3)
 
-In **Người có quyền**, select a server and person. Owners can set two separate controls:
+The **People & permissions** screen separates three decisions: a person's server role, the access level Kei may use, and when Kei needs approval. An Admin role controls server membership only; its separate **Admin access** choice says whether that admin can view the server or ask Kei to operate it. Relationship rank never grants permissions.
 
-| Scope | Meaning |
+**Access level** chooses the real connector boundary:
+
+| Mode | Actual permission scope |
 | --- | --- |
-| Minecraft-only | Server-scoped files/console/power tools. No general host shell; not an OS sandbox. |
-| Full Machine | Host commands over configured SSH. Only the operator or operator-configured host administrator can issue this scope. |
+| Sandbox | Minecraft server only; no general host shell. |
+| Host | The configured SSH user's permissions; Kei does not automatically use sudo. |
+| Root | Full machine control through the configured root/elevation path. |
 
-| Level | Behavior |
+**Mode** chooses who approves changes:
+
+| Mode | What happens |
 | --- | --- |
-| Default | Routine work runs in scope; risky steps receive internal review. |
-| Auto-review | Changes are reviewed automatically; denied steps return to the worker for replanning, without an owner ticket. |
-| Read only | Diagnostics run; writes need an eligible server or host owner approval. Observation-only tasks still cannot mutate. |
-| Full access | Executes within the explicitly granted scope without per-step approval. Assignment, target validation, backups and verification still apply. |
-| Custom | Editable TOML tool/path/command rules (`allow`, `deny`, `auto_review`), enforced before dispatch. Scope is never expanded. |
+| Ask for approval | Ask the person who started the task before every change. |
+| Approve for me | Routine changes proceed; changes the risk rules flag are sent to that same task starter. |
+| Read only | Kei can inspect; every requested change goes to an eligible server owner, or host owner for a host-level action. The task starter cannot approve this request. |
+| Full access | No per-step prompt inside the selected access level. Server assignment, target checks, backups and verification still apply. |
+| Custom rules | Configure tool switches, per-tool behavior, file path allow/deny patterns, blocked SSH command patterns and extra guidance in the dashboard. No TOML editing is required. |
 
-Custom can be edited directly in the Web config.toml editor; a separate operator-only setup step is no longer required. Legacy ask rules become auto_review. Admin delegation alone cannot issue host scope or bypass the owner's execution profile. Revocation sets conversation-only plus Minecraft/read-only to remove previously granted host execution.
+In **Custom rules**, switch each tool on or off, then choose whether Kei asks the task starter, reviews the change, or allows it within the saved scope. Unlisted tools have their own default. File and command rules only narrow access. Extra guidance is lower priority than system policy, the task, permissions and approval requirements; it cannot grant new authority.
+
+Only a server owner can change another person's access level or run mode. Admin membership permissions and host access are separate. A co-owner can manage this server but does not gain the bot operator account or SSH rights unless an owner separately grants them.
 
 Unsolicited public participation is removed. Old ambient settings are ignored. `kei` is the default configurable trigger; learned aliases only apply to the person who established them. The public followup window is at most two candidates, expires after 45 seconds by default, and closes when another person speaks. A candidate still may be ignored or receive only a reaction. Direct mentions, replies and actual work are stronger signals.
 
@@ -156,7 +163,7 @@ Open **People with access** / **Người có quyền**, choose a server, then fi
 
 The original configured owner stays protected. Co-ownership does not grant the bot operator account or host SSH authority. Full Machine needs an existing SSH connector and an explicit host grant. Relationship rank grants no access.
 
-**Custom** opens a validated TOML editor for allow, deny and auto_review rules. Deny blocks the selected tool, including reads; automatic review applies to changes. Choosing Allow never expands the selected server/host scope or an observation-only task. Revocation, grants and policy changes share the same access audit as Discord.
+**Custom rules** are edited with switches and pickers in the dashboard. A blocked tool cannot run; allowing a tool never expands the selected server/host scope or an observation-only task. Grants and policy changes share the access audit with Discord.
 
 Under the same server, choose which crash, delegated-admin/moderator and recovery reports should arrive in your own DM. Turn delivery off to keep the history without notifications. Ask “Kei, tắt thông báo thao tác admin cho server A” or “Kei, xem báo cáo server A gần đây”. Report retrieval requires management access. New co-owners have independent notification preferences.
 
@@ -176,20 +183,6 @@ Legacy explicit `machine` grants retain their Root meaning. New Host User grants
 Host User / Root chooses the identity of SSH commands. Panel, Wings and plugin actions keep their own scoped connector permissions. General shell accepts an optional absolute `cwd`; read-only host inspection can fall back to SSH home if the Minecraft directory is inaccessible, while mutations never silently move to a different directory.
 
 
-## Current run modes (3.2.0-rc.2)
+## Approval behavior
 
-Access scope answers **where**; run mode answers **how work is reviewed**. Select the person, then a mode card:
-
-| Mode | Behavior |
-|---|---|
-| Default permissions | Ordinary authorized work runs in scope. Risky steps receive an internal review. |
-| Auto-review | Changes and elevated steps receive an automatic allow/deny decision. A denial returns to the worker to replan; it does not send an owner approval ticket. |
-| Read only | Diagnostics remain available. Changes wait for an eligible server owner, or host owner when host scope is involved. The original requester cannot approve someone else's authority. |
-| Full access | Authorized changes execute without per-step approval/review; assignments, selected scope, backups and verification still apply. |
-| Custom (config.toml) | Uses validated `[tools]`, `[paths]` and `[shell]` rules. Each tool can allow, deny or auto_review. Path/command glob lists narrow the existing scope. Unsupported fields fail visibly. |
-
-Custom is an application policy, not an OS sandbox. Old `ask` rules migrate to `auto_review`; choose Read only for manual escalation. Existing explicit host grants keep their identity. A co-owner may adjust their own already-granted host policy without gaining permission to grant host access to others.
-
-Routine admin activity DMs default to **Save only**. Each owner can opt in independently. Read-only approval requests are a separate workflow and remain visible when an actual approval is required.
-
-The dashboard is now English. Discord conversation/persona language is unchanged. The run-mode cards and Custom editor replace the former ambiguous action/policy dropdown UX.
+Ask for approval and Read only both pause before a write, but they ask different people: Ask for approval goes to the task starter; Read only goes to the server/host owner. Approve for me asks the task starter only when deterministic risk checks flag a step. Routine admin activity reports are optional FYI notifications and never serve as approval cards. The dashboard is English; Discord conversation/persona language is unchanged.

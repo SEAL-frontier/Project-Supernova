@@ -230,10 +230,11 @@ class Access:
         for entry in people.values():
             from .permissions import policy
             entry['execution']=policy(self.db,self.engine.cfg,entry['subject'],server)
-            from .permissions import rules_for
+            from .permissions import rules_for,custom_for,custom_text
+            saved=custom_for(self.db,self.engine.cfg,entry['subject'],server)
             entry['execution']['rules']=rules_for(self.db,self.engine.cfg,entry['subject'],server)
-            from .permissions import custom_for,custom_text
-            entry['execution']['config']=custom_text(custom_for(self.db,self.engine.cfg,entry['subject'],server))
+            entry['execution']['custom']={key:saved[key] for key in ('paths','shell','instructions')}
+            entry['execution']['config']=custom_text(saved)
             entry['role']='owner' if entry.get('owner') else 'admin' if entry.get('admin') else entry['level']
             entry['permissions']=['Xem trạng thái, TPS/RAM và đọc log'] if entry['level'] in ('observe','copilot') else ['Trò chuyện với Kei']
             if entry['level']=='copilot':entry['permissions'].append('Nhờ thay cấu hình và chạy lệnh trên server; việc nhạy cảm vẫn cần xác nhận')
