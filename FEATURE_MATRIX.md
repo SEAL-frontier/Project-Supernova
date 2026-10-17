@@ -1,4 +1,22 @@
-# Supernova 4.0.0-rc.1 — feature matrix
+# Supernova 4.0.0-rc.2 — feature matrix
+
+## Current acceptance corrections
+
+The prior word "implemented" described code presence too broadly. See
+[the 35-checkpoint feedback audit](docs/REQUIREMENTS_AUDIT_4.md) for the actual
+code/field/remaining boundaries. Its numbering is reconstructed, not the original
+chat list numbering. Tables below retain release history and are not evidence
+that every originally requested nuance is complete.
+
+- Casual work recaps were confirmed to use report lists in actual retained chat.
+  Request-aware voice guidance and a bounded exceptional formatting repair now
+  distinguish them from genuine reports/commands. Normal valid chat stays one-pass.
+- Fixed three audited gaps: worker access to verified procedural knowledge,
+  personal call-name continuity on account linking, and revocation of sourced
+  public relationship permission when that source is forgotten.
+- Full Hermes skills, deep adaptive routine learning, richer lover progression,
+  short plugin pairing-code UX and several field acceptance gates remain partial.
+- Minecraft operation acceptance stays paused. No new in-game action claim.
 
 ## 4.0.0-rc.1 acceptance delta
 

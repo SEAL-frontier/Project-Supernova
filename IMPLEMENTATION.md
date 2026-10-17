@@ -1,4 +1,18 @@
-# Supernova 4.0.0-rc.1 — acceptance
+# Supernova 4.0.0-rc.2 — acceptance
+
+Current corrective scope: ordinary chat voice, three audited integration/privacy
+gaps, and the explicit [requirements audit](docs/REQUIREMENTS_AUDIT_4.md).
+The previous round's evidence below remains historical, not 35/35 completion.
+Current validation: **361 private checks** and **69 selected checks against the
+stripped public source**, including an import-path assertion. All passed.
+Real model calls on an isolated snapshot produced conversational check-in/greeting
+answers without lists (5.34/5.02 seconds); an explicitly requested report retained
+its list (6.40 seconds). A separate repair of the original reported outline took
+4.05 seconds, removed its outline and preserved command/link/quantity anchors.
+Snapshot integrity was OK and the original 2,119 messages, 140 memories and 106
+episodes were unchanged. No Gateway consumer or task dispatcher was started.
+These samples establish this formatting correction, not universal naturalness or
+the truth of every historical claim. Deployment/publication evidence is separate.
 
 - [x] Existing code and retained incidents audited before changes; five redacted private regression cases added.
 - [x] Sourced relationship/event updates, personal names, bounded continuation, quiet boundaries, original recall, private occasions, hosted setup and search-card reuse implemented and regression-tested.

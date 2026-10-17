@@ -65,6 +65,15 @@ class Identity:
         if self.discord(existing) not in (None, row["discord"]):
             raise PermissionError("UUID đã link người khác; unlink trước.")
         if existing!=target:
+            # Personal call names added before linking belong to the same person.
+            # Do not leave them on an orphaned Minecraft identity or share them
+            # with another person. Existing Discord choices take precedence.
+            if self.db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='kei_call_names'"):
+                from .social_runtime import names, set_names
+                combined=list(dict.fromkeys(names(self.db,target)+names(self.db,existing)))[:8]
+                with self.db.atomic():
+                    set_names(self.db,target,combined)
+                    self.db.execute('DELETE FROM kei_call_names WHERE person=?',(existing,))
             from .relationships import Relationships
             relationship=Relationships(self.db,self)
             profiles=[json.loads(relationship.profile_row(p)['profile']) for p in (target,existing)]

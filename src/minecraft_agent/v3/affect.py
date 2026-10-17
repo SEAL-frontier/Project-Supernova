@@ -158,7 +158,7 @@ class Affect:
   row=self.db.one("SELECT person,state FROM kei_bonds WHERE json_extract(state,'$.kind')='mutual'")
   if not row:return {'exclusive':False,'guidance':'Several ambiguous connections, fewer crushes; never promise commitment to everyone.'}
   state=json.loads(row['state']);result={'exclusive':True,'this_person':row['person']==person,'guidance':'Remain helpful to everyone. Do not pursue/confess to another person. Never expose hidden mechanics. Familiar affection grows from shared experience; disagreement does not withhold work.'}
-  if state.get('public'):
+  if state.get('public') and not self.db.tombstoned(state.get('public_sources',[])):
    account=self.db.one("SELECT u.account_display FROM kei_accounts a JOIN kei_users u ON u.user_id=a.account WHERE a.person=? AND a.platform='discord'",(row['person'],))
    if account:result['public_partner_name']=account['account_display']
   return result
@@ -208,5 +208,10 @@ class Affect:
    for row in self.db.rows('SELECT id,sources'+(',scope' if table=='kei_affect_events' else '')+' FROM '+table+' WHERE person=?',(person,)):
     if (not scope or row.get('scope',scope)==scope) and (not sources or set(sources)&set(json.loads(row['sources']))):self.db.execute('DELETE FROM '+table+' WHERE id=?',(row['id'],))
   row=self.db.one('SELECT state FROM kei_bonds WHERE person=?',(person,))
+  if row:
+   state=json.loads(row['state'])
+   if sources and set(sources)&set(state.get('public_sources',[])):
+    state.update(public=False,public_sources=[])
+    self.db.execute('UPDATE kei_bonds SET state=? WHERE person=?',(dumps(state),person))
   if row and (not scope or scope.startswith(('dm:','mc-private:'))) and (not sources or set(sources)&set(json.loads(row['state']).get('sources',[]))):self.db.execute('DELETE FROM kei_bonds WHERE person=?',(person,))
   self.db.execute('DELETE FROM kei_social_work_holds WHERE person=?'+(' AND scope=?' if scope else ''),(person,scope) if scope else (person,))

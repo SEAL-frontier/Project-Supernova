@@ -1,10 +1,16 @@
 # Supernova 4.0 release candidate
 
+The 4.0.0-rc.2 correction separates casual work stories from requested reports,
+keeps personal call names when linking accounts and supplies learned verified
+procedures to worker planning. [The feedback audit](REQUIREMENTS_AUDIT_4.md)
+lists 35 reconstructed checkpoints and their remaining limits; this is not a
+claim that all 35 are fully accepted.
+
 Kei connects conversation, durable social memory and authorized Minecraft work. Version 4 focuses on keeping those parts coherent: remembering a shared joke, knowing who a reply belongs to, and doing the assigned work even when the character is annoyed.
 
 ## Start here
 
-You can also install the Python wheel attached to the GitHub release: `python -m pip install keys_keys-4.0.0rc1-py3-none-any.whl`. The bridge JAR keeps its own version; it is the existing tested artifact, not a new gameplay acceptance claim.
+You can also install the Python wheel attached to the GitHub release: `python -m pip install keys_keys-4.0.0rc2-py3-none-any.whl`. The bridge JAR keeps its own version; it is the existing tested artifact, not a new gameplay acceptance claim.
 
 Run `keys-keys setup` once on the bot host. Keep the generated credentials and private persona on that host. Use `/setup` for the personal introduction, or sign into the configured dashboard with Discord. `/settings` remains available for recovery and quick changes.
 

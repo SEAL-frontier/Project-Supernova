@@ -1,8 +1,19 @@
 # Changelog
 
-Current public version: **4.0.0-rc.1**. Architecture: **Supernova**.
+Current public version: **4.0.0-rc.2**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 4.0.0-rc.2 — Talk like Kei, keep reports where they belong
+
+- Confirm the reported casual recap in retained real conversations before changing its delivery. Ordinary questions about past work use connected conversational utterances; genuine reports, steps and commands keep useful structure. Slang and teasing follow the character/context, not a fixed checklist.
+- Add request-aware voice instructions at generation and in the social schema. Repair an exceptional report-shaped casual answer at most once, keeping code/link/quantity anchors; do not add a model call to already-valid chat or requested structured output. Failures preserve the draft and never rerun the social decision or a task.
+- Carry configured personal call names across verified Minecraft/Discord account linking. Feed verified, server-scoped prior procedures into worker planning without granting permissions or replaying mutations automatically.
+- Revoke public partner disclosure when its supporting permission is forgotten, keeping unrelated relationship history intact.
+- Align the package import version with the runtime and distribution version; it previously retained a legacy version string.
+- Publish an explicit 35-checkpoint requirements audit with partial/missing acceptance boundaries. Do not count the remaining rich relationship, routine-learning, pairing and Hermes work as finished. Minecraft operation acceptance remains paused.
+
+Validation: 361 private checks and 69 selected checks against the stripped public source passed. Actual model replays distinguished ordinary check-ins from requested reports, and a formatting-only repair of the reported outline preserved command/link/quantity anchors. Snapshot/source integrity held; no test Discord messages or agent tasks were dispatched. These samples are not sustained social acceptance.
 
 ## 4.0.0-rc.1 — Follow the conversation, keep the story
 

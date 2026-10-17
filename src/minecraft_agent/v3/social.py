@@ -120,7 +120,7 @@ ROUTER = tool(
         "response_action": choices("reply", "short_reply", "react", "silence"),
         "reply": {
             "type": "string",
-            "description": "Natural Vietnamese in the configured persona, grounded in this exact turn. No canned offers of help. Do not disclose raw relationship scores or hidden IDs.",
+            "description": "Natural Vietnamese in the configured persona and this speaker's register, grounded in this exact turn. Casual chat and retelling past work use short connected utterances separated by newlines, not bullets/headings/report templates. Lists are for requested reports, genuine steps or comparisons. Slang, lowercase and emoticons are optional and mood-aware, never forced. No canned offers of help or obligatory teasing closer. Do not disclose raw relationship scores or hidden IDs.",
         },
         "reaction": choices(*REACTIONS),
         "importance": choices("low", "normal", "important"),
