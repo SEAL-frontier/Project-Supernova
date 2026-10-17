@@ -239,9 +239,9 @@ class Access:
             entry['execution']['custom']={key:saved[key] for key in ('paths','shell','instructions')}
             entry['execution']['config']=custom_text(saved)
             entry['role']='owner' if entry.get('owner') else 'admin' if entry.get('admin') else entry['level']
-            entry['permissions']=['Xem trạng thái, TPS/RAM và đọc log'] if entry['level'] in ('observe','copilot') else ['Trò chuyện với Kei']
-            if entry['level']=='copilot':entry['permissions'].append('Nhờ thay cấu hình và chạy lệnh trên server; việc nhạy cảm vẫn cần xác nhận')
-            if entry.get('admin'):entry['permissions'].append('Cấp và thu hồi quyền trên server này')
+            entry['permissions']=['View status, performance and logs'] if entry['level'] in ('observe','copilot') else ['Trò chuyện với Kei']
+            if entry['level']=='copilot':entry['permissions'].append('Ask Kei to operate this server within the assigned access level and run mode')
+            if entry.get('admin'):entry['permissions'].append('Manage members assigned to this server')
         return sorted(people.values(),key=lambda e:(not e.get('owner'),e['subject']))
 
 
@@ -312,14 +312,14 @@ class UserExperience:
     def person(self, user):
         return self.engine.identity.resolve("discord", str(user))
 
-    async def public_person(self, user, server=None):
+    async def public_person(self, user, server=None, cached_only=False):
         user=str(user);cached=self.people_cache.get(user)
-        if cached and cached[0]>time.time():return cached[1]
+        if cached and cached[0]>time.time() and (cached_only or cached[1].get('avatar_url')):return cached[1]
         from ..v2.identity import identity_record, sync_identity
         record=identity_record(self.db,user)
         result={'id':user,'display_name':record.get('display_name') or 'Tài khoản Discord','username':record.get('username') or '', 'avatar_url':None}
         account=getattr(self.bot,'get_user',lambda _:None)(int(user))
-        if account is None and hasattr(self.bot,'fetch_user'):
+        if account is None and not cached_only and hasattr(self.bot,'fetch_user'):
             try:account=await self.bot.fetch_user(int(user))
             except discord.HTTPException:pass
         if account:
@@ -368,6 +368,7 @@ class UserExperience:
             "user": user,
             "is_bot_owner": user == str(self.cfg["owner_id"]),
             "custom_instructions": personal_instructions(self.db,self.person(user)),
+            "call_names": __import__("minecraft_agent.v3.social_runtime",fromlist=["names"]).names(self.db,self.person(user)),
             "persona": persona.mode(self.db, user),
             "debug": self.engine.progress.mode(user),
             "preferences": {k: v for k, v in pref.items() if k != "person"},
@@ -397,10 +398,11 @@ class UserExperience:
             "romantic_opt_in",
             "romance_mode",
             "custom_instructions",
+            "call_names",
         }
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError("Thiết lập không hợp lệ.")
-        pref = {k: v for k, v in values.items() if k not in {"persona", "debug", "default_server", "custom_instructions"}}
+        pref = {k: v for k, v in values.items() if k not in {"persona", "debug", "default_server", "custom_instructions", "call_names"}}
         if 'custom_instructions' in values and (not isinstance(values['custom_instructions'],str) or len(values['custom_instructions'])>2000):
             raise ValueError('Lời dặn riêng tối đa 2.000 ký tự.')
         for key in ("dm_opt_in", "muted", "rank_notifications", "romantic_opt_in"):
@@ -424,6 +426,10 @@ class UserExperience:
                 raise ValueError("Múi giờ chưa hợp lệ. Ví dụ: Asia/Ho_Chi_Minh.") from exc
         # Validate everything before changing multiple personal preferences.
         with self.db.atomic():
+            if 'call_names' in values:
+                from .social_runtime import set_names
+                set_names(self.db,self.person(user),values['call_names'])
+                if self.engine.bridge:self.engine.bridge.refresh_aliases()
             if 'custom_instructions' in values:
                 from .instructions import set as save_instructions
                 save_instructions(self.db,self.person(user),values['custom_instructions'])
@@ -648,6 +654,27 @@ class UserExperience:
         if server not in self.access.visible(user):
             raise PermissionError("Bạn chưa được xem server này.")
         tool = self.engine.tools[server]
+        if tool.cs.get('ssh'):
+            from .execution import SHELL_IDENTITY
+            from .permissions import policy
+            import shlex
+            selected=policy(self.db,self.cfg,user,server)['extent']
+            def test_ssh():
+                client=tool.client();client.close() # Authentication is independently verified.
+                directory=tool.cs['ssh'].get('volume')
+                if not directory:return True
+                token=SHELL_IDENTITY.set(selected if selected in ('machine','host_user') else None)
+                try:
+                    result=tool.shell('test -r '+shlex.quote(directory.rstrip('/\\')+'/server.properties'),timeout=15)
+                    return result.get('exit_code')==0
+                finally:SHELL_IDENTITY.reset(token)
+            folder_ok=await asyncio.to_thread(test_ssh)
+            return {'ok':folder_ok,'ssh_authenticated':True,'server':server,'message':'SSH and Minecraft folder verified with your selected access level.' if folder_ok else 'SSH login works, but the Minecraft folder is not readable with your current access level. Check its path, permissions or connect a Panel.','capabilities':tool.capabilities()}
+        if tool.cs.get('bridge') and self.engine.bridge and self.engine.bridge.online(server):
+            return {'ok':True,'server':server,'message':'Paper bridge is online.','capabilities':tool.capabilities()}
+        if tool.local:
+            state=tool.local.detect()
+            return {'ok':state['root_visible'],'server':server,'message':'Folder access verified; process control is separate.','capabilities':tool.capabilities()}
         if "status" not in tool.capabilities():
             return {
                 "ok": False,
@@ -1047,7 +1074,7 @@ class SettingsView(discord.ui.View):
             self.button("Múi giờ", lambda i: i.response.send_modal(TimezoneModal(ux, user)))
 
         elif page == "privacy":
-            self.choice('Tình cảm trong nhân vật', 'romance_mode', [('organic','Để tự nhiên · crush một phía'),('mutual','Chỉ khi mình chủ động mời'),('off','Chỉ làm bạn')])
+            # Connection state grows in conversation; it is not a settings game.
             self.choice(
                 "Dùng memory giữa các ngữ cảnh",
                 "sharing",
@@ -1294,11 +1321,14 @@ class InstructionsModal(discord.ui.Modal,title='Lời dặn riêng cho Kei'):
         super().__init__();self.ux,self.user=ux,str(user)
         self.text=discord.ui.TextInput(label='Muốn Kei lưu ý điều gì khi nói chuyện?',style=discord.TextStyle.paragraph,required=False,max_length=2000,default=personal_instructions(ux.db,ux.person(user)),placeholder='Ví dụ: gọi mình là anh; trả lời ngắn khi mình đi học.')
         self.add_item(self.text)
+        from .social_runtime import names
+        self.names=discord.ui.TextInput(label='Tên riêng bạn sẽ gọi Kei · cách nhau dấu phẩy',required=False,max_length=330,default=', '.join(names(ux.db,ux.person(user))),placeholder='keys, cây, kei-kei')
+        self.add_item(self.names)
 
     async def on_submit(self,interaction):
         if str(interaction.user.id)!=self.user:
             await interaction.response.send_message('Lời dặn này không thuộc tài khoản của bạn.',ephemeral=True);return
-        self.ux.update(self.user,{'custom_instructions':str(self.text)})
+        self.ux.update(self.user,{'custom_instructions':str(self.text),'call_names':[s.strip() for s in str(self.names).split(',') if s.strip()]})
         await interaction.response.send_message('Đã lưu lời dặn riêng. Để trống rồi lưu nếu muốn xóa; lời dặn không thay quyền server hoặc tính cách gốc.',ephemeral=True)
 
 

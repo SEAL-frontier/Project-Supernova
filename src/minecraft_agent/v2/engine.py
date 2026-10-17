@@ -281,6 +281,10 @@ class Engine:
                             summary=args.get('summary','')
                             if args.get('success') and not succeeded:summary='Kei chưa có bằng chứng thực thi cho mục tiêu này; chưa thể xác nhận hoàn tất.'
                             self.db.update_task(k,status='succeeded' if succeeded else 'failed',result=summary,history=dumps(history))
+                            if succeeded:
+                                from ..v3.knowledge import Knowledge
+                                try:Knowledge(self.db).learn(self.db.one('SELECT * FROM kei_tasks WHERE id=?',(k,)),self.completion_missing)
+                                except Exception as exc:LOG.warning('Procedure learning deferred (%s)',type(exc).__name__)
                             if succeeded:self.progress.complete(k)
                             self.deliver_task_result(task,summary,args.get('monitor_verdict'));return
                         if name=='update_plan':

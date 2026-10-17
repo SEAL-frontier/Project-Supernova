@@ -1,8 +1,23 @@
 # Changelog
 
-Current public version: **3.4.0-rc.3**. Architecture: **Supernova**.
+Current public version: **4.0.0-rc.1**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+
+## 4.0.0-rc.1 — Follow the conversation, keep the story
+
+- Keep a public exchange attached to its actual person when others interrupt. Coalesce unfinished thoughts, keep typing through generation and delivery, send plain DM replies, and use references when public replies could be confused.
+- Personal call names can be set directly, without waiting for Kei to learn them. The default name still works; linked Minecraft aliases stay per person. Quiet requests persist with scope, authority and expiry; necessary assistance is an exception, not a global unmute.
+- Relationship changes use current sourced events instead of a six-hour waiting room. Small/large arrows work in both directions and do not automatically mean a new rank. Custom labels remain validated. Character connections form in normal dialogue, with mutual acceptance, uncertain trust, one exclusive partner, gradual familiarity, public/private boundaries and long-absence handling. No romance button or user-facing connection switch.
+- Add bounded global mood, observed activity patterns, available presence/custom status and source-backed private occasions. Proactive DMs still need opt-in; strong timely reasons can exceed a soft budget, never mute or repeated unanswered sends.
+- A public daily status can reflect a memorable public exchange or an established character taste. Private conversations and restricted channels are excluded. No invented drama to fill an empty day.
+- Search progress becomes the answer in the same edited message. The small source count uses successful page receipts, including deduplication across queries. Distinguish no results from failed/inaccessible sources, avoid duplicate queries, and request evidence for current or unfamiliar technical claims.
+- Restore the sign-in state before loading the dashboard; avoid sequential network lookups just to show the access roster. Add guided SSH/SFTP, local folder and outbound Paper bridge setup alongside Pterodactyl/Pelican, connection lists and read-only tests. New SSH keys require an explicit fingerprint check.
+- Add task-owned attachment transfer with backup and byte verification, original-history recall with model-selected topic expansion, and verified procedure reuse. Uploaded data never grants execution permission. Preserve existing execution scopes, approval modes, scoped forgetting and loop guards.
+
+Validation before deployment: **338 private regressions**, **84 regressions against the stripped public export**, with an import-path check proving the public modules were tested; JavaScript syntax check; real deployment-host snapshot migration preserving 2,107 messages, 105 episodes and 134 memories; actual low-model counter/nickname replays; real Exa search reading two pages from one site; actual Panel status and SSH authentication plus UID-0/scoped folder read. Available Discord presence/member intents were checked from the application API. Browser testing used a disposable local fixture and covered session restoration, the connected-server list and the expanded SSH selector. These are not independent novice setup, sustained live social acceptance or new Minecraft write/action acceptance.
+
+This is a release candidate. Minecraft copilot end-to-end acceptance remains paused at the operator's request. Live social quality across days and a new person's complete OAuth/setup journey still need field acceptance; an isolated model replay or unit test is not that proof.
 
 ## 3.4.0-rc.3 — Check the right thing, stop the other loop paths
 

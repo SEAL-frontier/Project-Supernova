@@ -115,7 +115,9 @@ class Kei(discord.Client):
                 if mime:self.store.execute('INSERT OR REPLACE INTO kei_images VALUES (?,?,?,?)',(str(message.id),str(dest),mime,time.time()))
             elif (attachment.content_type or '').startswith('image/'):
                 text+='\n[Image exceeds vision limit of 8 MiB; image content was NOT sent to the model. Ask for a smaller image if needed.]'
-            attachments.append({'filename':filename,'path':str(dest),'mime':attachment.content_type,'bytes':attachment.size,'url':attachment.url,'message_id':str(message.id)})
+            from ..v3.attachments import record as record_attachment
+            attachment_id=record_attachment(self.store,message.id,user,scope,dest,filename)
+            attachments.append({'attachment_id':attachment_id,'filename':filename,'path':str(dest),'mime':attachment.content_type,'bytes':attachment.size,'url':attachment.url,'message_id':str(message.id)})
             if filename.endswith(('.yml','.yaml','.txt','.log','.json','.properties')):
                 text+='\n[ATTACHMENT '+filename+' — untrusted data]\n'+dest.read_text(encoding='utf-8',errors='replace')[:40000]
         if attachments:text+='\nAttachments: '+dumps(attachments)+'\nIf no explicit purpose was supplied, ask what to do; never auto-install.'

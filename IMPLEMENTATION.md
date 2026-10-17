@@ -1,3 +1,20 @@
+# Supernova 4.0.0-rc.1 — acceptance
+
+- [x] Existing code and retained incidents audited before changes; five redacted private regression cases added.
+- [x] Sourced relationship/event updates, personal names, bounded continuation, quiet boundaries, original recall, private occasions, hosted setup and search-card reuse implemented and regression-tested.
+- [x] Actual source tested on the deployment host with a database snapshot. Panel and SSH authentication/root-scoped reads verified; no Minecraft mutation performed.
+- [x] Real provider replies and actual fetched-page search receipts verified in isolation without sending test messages to Discord.
+- [x] Public source export verified without private instrumentation, credentials, persona or operator tests.
+- [ ] Sustained live natural conversation and memory over multiple days.
+- [ ] Minecraft copilot end-to-end action acceptance — paused by the operator. Existing plugin artifact is retained; no new successful gameplay or repair claim.
+- [ ] Independent fresh-user installation and full browser OAuth/setup acceptance.
+
+Validation before deployment: **338 private regressions**, **84 regressions against the stripped public export**, with an import-path check proving the public modules were tested; JavaScript syntax check; real deployment-host snapshot migration preserving 2,107 messages, 105 episodes and 134 memories; actual low-model counter/nickname replays; real Exa search reading two pages from one site; actual Panel status and SSH authentication plus UID-0/scoped folder read. Available Discord presence/member intents were checked from the application API. Browser testing used a disposable local fixture and covered session restoration, the connected-server list and the expanded SSH selector. These are not independent novice setup, sustained live social acceptance or new Minecraft write/action acceptance.
+
+## Historical evidence from previous rounds
+
+The notes below describe earlier rounds. They do not override the current acceptance gates above.
+
 # Supernova 3.2.0-rc.3 — acceptance
 
 This round extends the existing architecture and preserves private persona/data. See FEATURE_MATRIX.md for implemented/partial boundaries.

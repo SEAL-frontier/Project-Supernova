@@ -8,6 +8,12 @@ from ..v2.web_search import WebSearch
 
 SEARCH_SINK = contextvars.ContextVar("kei_search_sink", default=None)
 
+def lookup_hint(text):
+    own=str(text).split('[REPLIED MESSAGE',1)[0].split('[ATTACHMENT',1)[0].strip()
+    explicit=re.search(r'^\s*(?:kei[, !:]*)?search\b|\b(?:search (?:for|about)|tra (?:cứu|tài liệu)|tìm (?:trên (?:web|mạng)|link|nguồn)|(?:hãy|giúp|thử|dùng).{0,20}(?:search|tìm trên mạng))',own,re.I)
+    current=re.search(r'\bmới nhất\b|latest (?:version|release|news)|giá .{0,25}(?:hôm nay|hiện tại)|(?:version|phiên bản).{0,25}(?:hiện tại|current)',own,re.I)
+    return re.sub(r'<@!?\d+>','',own)[:220] if explicit or current else ''
+
 
 async def public_url(url):
     parsed = urlsplit(url)
@@ -83,6 +89,7 @@ class Search(WebSearch):
                 pages=result["fetched_pages"],
                 status=result["status"],
                 errors=len(result["fetch_errors"]),
+                receipts=[{'url':r['url'],'domain':r['domain']} for r in result['fetched']],
             )
             return result
         result["status"] = (
@@ -118,5 +125,6 @@ class Search(WebSearch):
             pages=len(fetched),
             status=result["status"],
             errors=len(errors),
+            receipts=[{'url':r['url'],'domain':r['domain']} for r in fetched],
         )
         return result

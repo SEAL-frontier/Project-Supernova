@@ -75,6 +75,8 @@ class Bridge:
                 )
                 if (same or sharing=='discreet') and not self.db.tombstoned(json.loads(row['sources'])):
                     aliases.append(row["alias"])
+            from .social_runtime import names as call_names
+            aliases+=call_names(self.db,account['person'])
             if aliases:
                 by_uuid[account["account"]] = list(dict.fromkeys(aliases))[:20]
         return {

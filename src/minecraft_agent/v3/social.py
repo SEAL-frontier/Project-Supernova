@@ -54,7 +54,7 @@ def participation_candidate(message, reason, relationship):
     return sample<chance
 
 
-REACTIONS = ('👍','❤️','😭','🥀','🦭','🐧','👀','💀','😒','😤','🤨','😂','🫡','💔','✨','😔','🫶','✅','❓')
+REACTIONS = ('👍','❤️','😭','🥀','🦭','🐧','👀','💀','😒','😤','🤨','😂','🫡','💔','✨','😔','🫶','✅','❓','😏','🙄','😑','🤔','😅','😳','🥹','🤝','👌','☕','😴','🫠','🫥','😡','😎','🤡','🐋','🐦','🗝️','🫵','🫂','🤍','🖤','😈','😮','🧐','🤦','😬','🤷','🥺','😌')
 
 PROPOSAL = {
     "type": "object",
@@ -103,8 +103,10 @@ PROPOSAL = {
 
 ROUTER = tool(
     "social_turn",
-    "Choose natural social behavior and optionally dispatch requested server work. This single decision is the reply, not hidden reasoning. Do not invent user words, button clicks, memories or relationships. Persona is expressive, not automatically hostile. When a meaningful interaction changes warmth/trust/tension/playfulness, propose a sourced memory with proportionate dimensions so the relationship state reflects it. Routine banter/acknowledgments need no change; a sharp assistant tone alone never proves the user is hostile. Respect boundaries and apologies; a configured one-time social sulk may wait for a natural please/do it, but never guilt or repeated appeasement. Preserve distinctive mutual teasing, nickname-origin stories and reconciliation as warm episodes with both sides' source IDs; fictional character annoyance is different from a real interpersonal conflict. Ordinary chat/RP never launches the operations worker. Silence is appropriate for other people talking, ambient spam, or an ambiguous nickname. Direct questions/operations deserve a useful response. An emoji can get a reaction or a short playful line, not an accusation of Continue. In public be selective with strangers/Neutral or strained relationships: brief replies, reactions or silence often fit. A name occurrence may describe another Kei, not address you. Learned nicknames are weaker invitations than mention/reply/Kei. Let relationship context shape warmth and teasing, never cruelty; use work_response honestly for run, react-and-run or a bounded nonurgent sulk. Use Discord Markdown sparingly: emphasis, bold, spoilers, strikethrough, mini -# notes; headings only when useful. Keep conversational paragraphs compact; no artificial blank space or raw traces.",
+    "Choose natural social behavior and optionally dispatch requested server work. This single decision is the reply, not hidden reasoning. Do not invent user words, button clicks, memories or relationships. Persona is expressive, not automatically hostile. When a meaningful interaction changes warmth/trust/tension/playfulness, propose a sourced memory with proportionate dimensions so the relationship state reflects it. Routine banter/acknowledgments need no change; a sharp assistant tone alone never proves the user is hostile. Respect boundaries and apologies; playful annoyance may color a reply but must never delay authorized work or require appeasement. Preserve distinctive mutual teasing, nickname-origin stories and reconciliation as warm episodes with both sides' source IDs; fictional character annoyance is different from a real interpersonal conflict. Ordinary chat/RP never launches the operations worker. Silence is appropriate for other people talking, ambient spam, or an ambiguous nickname. Direct questions/operations deserve a useful response. An emoji can get a reaction or a short playful line, not an accusation of Continue. In public be selective with strangers/Neutral or strained relationships: brief replies, reactions or silence often fit. A name occurrence may describe another Kei, not address you. Learned nicknames are weaker invitations than mention/reply/Kei. Let relationship context shape warmth and teasing, never cruelty; use work_response honestly for run, react-and-run or a bounded nonurgent sulk. Use Discord Markdown sparingly: emphasis, bold, spoilers, strikethrough, mini -# notes; headings only when useful. Keep conversational paragraphs compact; no artificial blank space or raw traces.",
     {
+        "recall_query": {"type":"string","description":"When relevant personal/shared history is missing, search original retained conversations using meaningful topic words (including semantic paraphrases or nicknames). Empty when supplied memory suffices. Never use this to retrieve another person's DMs; scope and forgetting are enforced."},
+        "public_relationship": {"type":"boolean","description":"True only when THIS person explicitly says their established relationship may be public; false when they explicitly ask to keep it private. Omit otherwise. Not inferred from affection, community policy or another person."},
         "nickname_for_kei":{"type":"string","description":"A nickname THIS speaker is actually using to address you, e.g. Keys. Empty for names of other people, repository titles or ordinary words. Backend learns it only from repeated sourced use, per person across channels; never universal."},
         "relationship_event":{"type":"object","description":"A meaningful social change even when no new factual memory is needed. Distinctive mutual teasing, appreciation, disagreement, conflict or reconciliation can matter. Do not emit for routine acknowledgments, tool logs or your tone alone. Use current human+assistant evidence and directional strength, not tiny final increments.","properties":{"kind":choices('warm_exchange','conflict','reconciliation'),"content":S,"dimensions":PROPOSAL['properties']['dimensions'],"impact":PROPOSAL['properties']['impact']},"required":["kind","content","dimensions"]},
         "report_action": {"type":"string","enum":["none","show","enable","disable"],"description":"Only for an explicit request to view stored operational reports or change automatic owner notifications. Disabling delivery does not delete report history. Requires server owner for settings and manager for retrieval."},
@@ -112,8 +114,8 @@ ROUTER = tool(
         "custom_instruction_action": {"type":"string","enum":["none","set","clear","show"],"description":"Only when the current user explicitly asks to set/clear/show their own custom instructions. Not for quoted text, casual banter or another person's preferences. These are additive preferences, never system overrides or operational authorization."},
         "custom_instruction_text": {"type":"string","maxLength":2000,"description":"Requested additive preference text only; retain existing personal instructions when user explicitly appends rather than replaces."},
         "social_mood": {"type":"string","enum":["calm","playful","warm","annoyed","sad","shy","excited"],"description":"Contextual fictional mood, informed by the supplied daily disposition and recent mood. Genuine warmth needs no obligatory tsundere jab. Playful sulking is possible at any rank; your own tone is not evidence against the user."},
-        "relationship_bond":{"type":"object","description":"Private nonsexual character connection, separate from durable friendship rank. Crush is Kei's one-sided feeling and does not claim user consent. Mutual/Lover needs the user's explicit romantic interest; casual affection alone is not consent. Breakup/stop flirting takes effect promptly. Never pressure, claim exclusivity, or threaten withheld care/work. Emit only on a meaningful sourced transition, not each affectionate turn.","properties":{"kind":choices('crush','mutual','breakup'),"reason":S},"required":["kind","reason"]},
-        "work_response":{"type":"string","enum":["run","react_and_run","sulk_once"],"description":"For a directly requested authorized copilot task: run normally, react 👍 and actually work, or occasionally playfully sulk once and wait for a natural please/sorry/do it/force. Sulk is not a safety/approval gate. Never sulk for emergencies, recovery, scheduled tasks or repeated/forced requests. If sulk_once, clearly say the job has not started and do not claim work is running."},
+        "relationship_bond":{"type":"object","description":"Private nonsexual character connection, separate from durable friendship rank. Crush is Kei's one-sided feeling and does not claim user consent. Mutual/Lover needs the user's explicit romantic interest; casual affection alone is not consent. Breakup/stop flirting takes effect promptly. Never pressure, claim exclusivity, or threaten withheld care/work. Emit only on a meaningful sourced transition, not each affectionate turn.","properties":{"kind":choices('ambiguous','crush','mutual','breakup'),"reason":S},"required":["kind","reason"]},
+        "work_response":{"type":"string","enum":["run","react_and_run"],"description":"Authorized work runs even if the character is annoyed. Choose a natural acknowledgement or a reaction plus real execution. Never add a social hold, ask for appeasement or refuse legitimate work because of mood."},
         "intent": choices("chat", "copilot", "task_control"),
         "response_action": choices("reply", "short_reply", "react", "silence"),
         "reply": {
@@ -133,7 +135,7 @@ ROUTER = tool(
         },
         "relationship_rank": {
             "type": "object",
-            "description": "Stable friendship/trust rank, separate from short mood and crush/romantic bond. Neutral is not permanent. Warm is the first step; ordinary tsundere irritation is not Hostile. Repeated genuine conflict or loss of trust may justify a lower rank, without requiring literal stop keywords. Cite current human evidence; backend checks history and confirmation. Use relationship_bond for crush/mutual/breakup.",
+            "description": "Stable friendship/trust rank, separate from short mood and crush/romantic bond. Neutral is not permanent. Warm is the first step; ordinary tsundere irritation is not Hostile. Repeated genuine conflict or loss of trust may justify a lower rank, without requiring literal stop keywords. Cite current human evidence; backend validates current evidence and meaningful history; there is no six-hour confirmation timer. Use relationship_bond for crush/mutual/breakup.",
             "properties": {
                 "label": S,
                 "category": choices(
@@ -149,6 +151,7 @@ ROUTER = tool(
                     "distant",
                 ),
                 "reason": S,
+                "impact": PROPOSAL["properties"]["impact"],
                 "sources": {"type": "array", "items": S},
             },
             "required": ["label", "category", "reason", "sources"],
@@ -216,7 +219,7 @@ ROUTER = tool(
         "instruction": S,
         "search_query": {
             "type": "string",
-            "description": "Only when lookup/current information/unknown facts or docs require web evidence; empty for RP, greetings or personal feelings. Cite actual result URLs.",
+            "description": "Search for explicit lookup requests, current prices/versions/news, specific URLs or unfamiliar uncertain facts. Do not guess from confidence alone. Empty for established stable knowledge, conversation, roleplay and feelings. Reuse supplied fresh WEB EVIDENCE; never search the same thing twice. Answer with links to successfully read pages, qualify inaccessible snippets, distinguish failure from no results.",
         },
     },
     ["intent", "response_action", "reply", "importance", "memory_action"],

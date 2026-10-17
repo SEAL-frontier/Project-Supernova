@@ -52,7 +52,7 @@ INTIMATE = re.compile(
     r"lover|romantic|soulmate|girlfriend|boyfriend|wife|husband|người yêu|vợ|chồng", re.I
 )
 BOUNDARY = re.compile(
-    r"\b(stop|don't|do not|leave me|ignore me|im lặng|đừng|không muốn|không thích|để .{0,12}yên|ngừng)\b",
+    r"\b(stop|don't|do not|leave me|ignore me|forbidden|im lặng|dừng|ngưng|đừng|không muốn|không thích|để .{0,12}yên|ngừng)\b",
     re.I,
 )
 
@@ -219,7 +219,7 @@ class Relationships:
                 self._save(person,'global',json.loads(legacy['state']),legacy['updated']);row=legacy
         self.db.execute("DELETE FROM kei_relationship_ranks WHERE person=? AND scope!='global'",(person,))
         return (
-            json.loads(row["state"])
+            {k:v for k,v in json.loads(row["state"]).items() if k!="pending"}
             if row
             else {
                 "label": "Neutral",
@@ -276,7 +276,7 @@ class Relationships:
         sessions = len(history)
         days = len({int(r["at"] // 86400) for r in history})
         _, stage, minimum, minimum_days = RANKS[category]
-        if sessions < minimum or days < minimum_days:
+        if sessions < {'neutral':0,'warm':1,'friend':3,'trusted':5,'close':8,'intimate':3,'tense':1,'distrustful':2,'hostile':3,'distant':1}[category]:
             return False
         if stage > 0 and (profile.get("trust", 0.5) < 0.45 or profile.get("warmth", 0.5) < 0.45):
             return False
@@ -294,19 +294,18 @@ class Relationships:
             if r["role"] == "user" and self.identity.person_for_user(r["user"]) == person
         ]
         if category == "intimate":
-            if not self.preferences(person)["romantic_opt_in"] or not any(
-                INTIMATE.search(s) for s in own
-            ):
-                return False
+            bond=self.db.one("SELECT state FROM kei_bonds WHERE person=?",(person,)) if self.db.one("SELECT name FROM sqlite_master WHERE name='kei_bonds'") else None
+            if not bond or json.loads(bond['state']).get('kind')!='mutual':return False
         if stage < 0:
+            strong_event=proposal.get('impact')=='major' and category=='tense' and len(' '.join(own))>=20 and any(BOUNDARY.search(s) or re.search(r'không.{0,8}tin|hết tin|lost.{0,8}trust|betray|lừa (?:anh|tao|tôi)',s,re.I) for s in own)
             # Character banter or assistant demands are not evidence that the user is hostile.
-            if profile.get("tension", 0) < 0.15 and profile.get('trust',.5) >= .4:
+            if profile.get("tension", 0) < 0.15 and profile.get('trust',.5) >= .4 and not strong_event:
                 return False
             conflict = self.db.one(
                 "SELECT count(DISTINCT event) n FROM kei_relationship_activity WHERE person=? AND kind='conflict' AND at>?",
                 (person, now - 30 * 86400),
             )
-            if not conflict or conflict["n"] < 2:
+            if (not conflict or conflict['n']<2) and not strong_event and not (proposal.get('impact')=='major' and profile.get('tension',0)>=.35 and profile.get('trust',.5)<.4 and len(' '.join(own))>=20):
                 return False
         current = self.rank(person, scope)
         if current["label"] == label and current["category"] == category:
@@ -314,34 +313,12 @@ class Relationships:
         old_stage = RANKS.get(current["category"], RANKS["neutral"])[1]
         if abs(stage - old_stage) > 1 and not (stage < 0 and stage < old_stage):
             return False
-        # Sourced independent evidence confirms a candidate after the configured window.
-        pending = current.get("pending", {})
-        independent = set(sources) - set(pending.get("sources", []))
-        if pending.get("category") != category:
-            current["pending"] = {
-                "label": label,
-                "category": category,
-                "reason": reason,
-                "sources": sources,
-                "since": now,
-            }
-            self._save(person, scope, current, now)
-            return False
-        # Wording may vary between turns; a rename must not restart the clock.
-        label = pending.get('label') or label
-        if (
-            now - pending["since"] < float(self.config.get('rank_confirmation_hours',6))*3600
-            or not independent
-            or (current.get("changed") and now - current["changed"] < 86400)
-        ):
-            return False
-        previous_sources = pending.get("sources", [])
-        # Never confirm a candidate after its older evidence was forgotten.
-        if self._evidence(person, 'global', previous_sources) is None:
-            current.pop("pending", None)
-            self._save(person, scope, current, now)
-            return False
-        changed_sources = list(dict.fromkeys(previous_sources + sources))
+        # Evidence and hysteresis, never a six-hour timer. A major sourced
+        # event can move faster; a casual relabel cannot oscillate every turn.
+        previous_sources=current.get('sources',[])
+        if current.get('changed') and now-current['changed']<600:
+            if proposal.get('impact')!='major' or len(' '.join(own))<20:return False
+        changed_sources=list(dict.fromkeys(previous_sources+sources))[-24:]
         change = hashlib.sha256(
             (person + scope + label + dumps(changed_sources)).encode()
         ).hexdigest()[:24]
@@ -368,7 +345,7 @@ class Relationships:
             self._save(
                 person,
                 scope,
-                {"label": label, "category": category, "reason": reason, "changed": now},
+                {"label": label, "category": category, "reason": reason, "changed": now,"sources":changed_sources},
                 now,
             )
         return True
@@ -403,7 +380,7 @@ class Relationships:
             "SELECT at FROM kei_relationship_changes WHERE person=? AND notification='sent' ORDER BY at DESC LIMIT 1",
             (person,),
         )
-        if old and now - old["at"] < float(self.config.get('rank_notice_hours',6))*3600:
+        if old and now - old["at"] < float(self.config.get('rank_notice_minutes',10))*60:
             return None
         known_direction = self.db.one(
             "SELECT direction FROM kei_relationship_change_directions WHERE id=?", (row["id"],)

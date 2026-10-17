@@ -108,6 +108,7 @@ class HybridTools(ServerTools):
         return sorted(caps)
 
     def _need(self, cap):
+        if cap=="attachment_install":cap="files"
         if cap not in self.capabilities():
             raise ValueError(
                 "Server chưa có capability "
@@ -600,6 +601,13 @@ class HybridTools(ServerTools):
         if len(raw) > cap:
             raise ValueError("Binary file exceeds analysis limit")
         return bytes(raw)
+
+    def do_attachment_install(self,attachment_id,path):
+        from .attachments import CONTEXT,transfer
+        context=CONTEXT.get()
+        if not context:raise PermissionError('Attachment transfer requires a live authorized task.')
+        db,task=context
+        return transfer(db,task,{'attachment_id':attachment_id,'path':path},self)
 
     def do_plugin_install(self, url, filename, sha256=None, stage_only=False):
         if self.cs.get("ssh", {}).get("volume") and not self.local:

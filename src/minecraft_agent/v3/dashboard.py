@@ -208,13 +208,15 @@ class Dashboard:
             response.headers["X-Frame-Options"] = "DENY"
             return response
 
-        app = web.Application(middlewares=[errors], client_max_size=16384)
+        app = web.Application(middlewares=[errors], client_max_size=65536)
         app.router.add_get("/", self.home)
         app.router.add_get("/assets/kei.png", self.avatar)
         app.router.add_get("/login", self.login)
         app.router.add_get("/oauth/callback", self.callback)
+        app.router.add_get("/api/session", self.session_hint)
         app.router.add_get("/api/state", self.state)
         app.router.add_get("/api/global/overview", self.global_overview)
+        app.router.add_get("/api/global/occasions",self.global_occasions)
         app.router.add_get("/api/global/relationships", self.global_relationships)
         app.router.add_get("/api/global/settings", self.global_settings)
         app.router.add_post("/api/global/settings", self.update_global_settings)
@@ -231,6 +233,8 @@ class Dashboard:
         app.router.add_post("/api/connect/preview", self.connect_preview)
         app.router.add_post("/api/connect/commit", self.connect_commit)
         app.router.add_post("/api/server/test", self.server_test)
+        app.router.add_post("/api/connect/service/preview",self.service_preview)
+        app.router.add_post("/api/connect/service/commit",self.service_commit)
         app.router.add_get("/api/tasks", self.tasks)
         app.router.add_post("/api/tasks/propose", self.task_propose)
         app.router.add_post("/api/tasks/action", self.task_action)
@@ -435,6 +439,10 @@ class Dashboard:
     async def home(self, request):
         nonce = secrets.token_urlsafe(20)
         html = render_home(nonce, self.branding, self.auth_ready)
+        notice=str(self.cfg.get('credential_notice',''))
+        if not notice and self.ux.cfg.get('social',{}).get('hosted_credential_notice'):
+            notice='Hosted service: the operator stores these credentials on the bot host. If that host is compromised, connected servers may be affected too. This experimental service is provided as-is; keep your own backups and use an account with limited access.'
+        html=html.replace('__CREDENTIAL_NOTICE__',__import__('html').escape(notice))
         response = web.Response(text=html, content_type="text/html")
         response.headers["Content-Security-Policy"] = (
             "default-src 'none'; script-src 'nonce-"
@@ -455,6 +463,13 @@ class Dashboard:
         if not path.is_file():raise web.HTTPNotFound()
         return web.FileResponse(path)
 
+    async def session_hint(self,request):
+        # Presentation only; no authority, tokens or CSRF. Every real operation
+        # still uses session() and fresh Discord checks where required.
+        key=hashlib.sha256(request.cookies.get('kei_session','').encode()).hexdigest()
+        row=self.db.one('SELECT user,name FROM kei_web_sessions WHERE session_hash=? AND expires>?',(key,self.clock()))
+        return web.json_response({'signed_in':bool(row),'name':row['name'] if row else None})
+
     async def state(self, request):
         session = await self.session(request)
         result = self.ux.state(session["user"])
@@ -462,14 +477,25 @@ class Dashboard:
             if server["manage_access"]:
                 server["grants"] = self.ux.access.entries(session["user"], server["id"])
                 for grant in server['grants'][:50]:
-                    grant['person']=await self.ux.public_person(grant['subject'],server['id'])
-                    if grant.get('issuer') and str(grant['issuer']).isdigit():grant['grantor']=await self.ux.public_person(grant['issuer'],server['id'])
+                    grant['person']=await self.ux.public_person(grant['subject'],server['id'],cached_only=True)
+                    if grant.get('issuer') and str(grant['issuer']).isdigit():grant['grantor']=await self.ux.public_person(grant['issuer'],server['id'],cached_only=True)
         result.update(name=session["name"], csrf=session["csrf"], guilds=self.guilds(session))
         return web.json_response(result)
 
     def require_bot_owner(self, session):
         if str(session.get('user')) != str(self.ux.cfg.get('owner_id')):
             raise PermissionError('This page is available to the configured bot owner only.')
+
+    async def global_occasions(self,request):
+        session=await self.session(request);self.require_bot_owner(session)
+        items=[]
+        for row in self.db.rows('SELECT * FROM kei_social_occasions ORDER BY month,day LIMIT 200'):
+            if self.db.tombstoned(json.loads(row['sources'])):continue
+            user=self.ux.engine.identity.discord(row['person'])
+            account=await self.ux.public_person(user,cached_only=True) if user else {'display_name':'Linked player'}
+            delivery=self.db.one('SELECT status,at FROM kei_occasion_deliveries WHERE occasion=? ORDER BY year DESC LIMIT 1',(row['id'],))
+            items.append({'person':account['display_name'],'kind':row['kind'],'month':row['month'],'day':row['day'],'enabled':bool(row['enabled']),'last_delivery':delivery})
+        return web.json_response({'items':items,'note':'Private internal social occasions; actual delivery still requires DM opt-in and a relevant date.'})
 
     async def global_settings(self,request):
         session=await self.session(request)
@@ -534,7 +560,9 @@ class Dashboard:
     async def profile(self, request):
         session = await self.session(request)
         # Personal web profile uses only the authenticated user's own DM context.
-        return web.json_response(self.ux.profile(session["user"], "dm:" + session["user"]))
+        profile=self.ux.profile(session["user"],"dm:"+session["user"])
+        profile.pop("bond",None)
+        return web.json_response(profile)
 
     async def memories(self,request):
         session=await self.session(request)
@@ -648,6 +676,21 @@ class Dashboard:
                 session["user"], body.get("connection", ""), body.get("index"), guild
             )
         )
+
+    def connections(self):
+        if not hasattr(self,'_connections'):
+            from .onboarding import Connections
+            self._connections=Connections(self.ux)
+        return self._connections
+
+    async def service_preview(self,request):
+        session=await self.session(request,True)
+        return web.json_response(await self.connections().preview(session['user'],await request.json()))
+
+    async def service_commit(self,request):
+        session=await self.session(request,True);body=await request.json();guild=str(body.get('guild',''))
+        if guild and guild not in {g['id'] for g in self.guilds(session) if g['manage_guild']}:raise PermissionError('You do not manage this Discord server.')
+        return web.json_response(await self.connections().commit(session['user'],str(body.get('connection','')),str(body.get('fingerprint','')),guild))
 
     async def server_test(self, request):
         session = await self.session(request, True)

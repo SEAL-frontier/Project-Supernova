@@ -9,6 +9,7 @@ def step_summary(name,args):
     action=args.get('action','')
     if name=='power':return {'start':'Bật server','stop':'Tắt server','restart':'Khởi động lại server','kill':'Buộc dừng server'}.get(action,'Đổi trạng thái server')
     if name in ('file_action','files'):return {'remove':'Xóa tệp hoặc thư mục','restore':'Khôi phục bản sao','backup':'Sao lưu dữ liệu','write':'Ghi lại nội dung tệp'}.get(action,'Thay đổi tệp')+(' `'+path+'`' if path else '')
+    if name=='attachment_install':return 'Chép file đính kèm vào `'+path+'`, giữ bản sao file cũ và kiểm tra nội dung đã chép.'
     if name=='remote_shell':
         command=str(args.get('command',''))
         if re.search(r'\brm\s',command):

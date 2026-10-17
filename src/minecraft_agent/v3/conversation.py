@@ -54,6 +54,7 @@ class Conversation:
         CREATE TABLE IF NOT EXISTS kei_task_origins(task TEXT PRIMARY KEY,scope TEXT,actor TEXT,channel TEXT,message TEXT,ack TEXT);
         CREATE TABLE IF NOT EXISTS kei_task_outbox(outbox TEXT PRIMARY KEY,task TEXT);
         CREATE TABLE IF NOT EXISTS kei_social_sent(action TEXT PRIMARY KEY,message TEXT);
+        CREATE TABLE IF NOT EXISTS kei_search_cards(channel TEXT,request TEXT,message TEXT,header TEXT,receipts TEXT,at REAL,finished INTEGER DEFAULT 0,PRIMARY KEY(channel,request));
         """)
         if not hasattr(store, "delivery_queue_original"):
             store.delivery_queue_original = store.queue
@@ -167,6 +168,8 @@ class Conversation:
             target = str(request)
         if scope.startswith("dm:") and mode == "reply" and target == str(request):
             mode = "channel"
+        elif scope.startswith('guild:') and mode=='reply' and target==str(request):
+            mode='channel' # Late interleaving is checked immediately before send.
         if mode == "edit":
             card = self.db.one(
                 "SELECT c.message FROM kei_debug_cards c JOIN kei_tasks t ON t.id=c.task WHERE c.message=? AND t.scope=? AND t.requester=?",
@@ -219,6 +222,10 @@ class Conversation:
             ):
                 LOG.info("REACTION_TARGET_UNAVAILABLE")
             return
+        search = self.db.one('SELECT * FROM kei_search_cards WHERE channel=? AND request=? AND finished=0 AND at>?', (row['channel'],row['message'],time.time()-3600))
+        if search:
+            first=await self.finish_search(channel,search,row['content'])
+            if first:return first
         mode = target["mode"] if target else "reply"
         if mode == "edit":
             try:
@@ -231,6 +238,13 @@ class Conversation:
                     return str(message.id)
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 pass
+        import asyncio
+        if target and target['scope'].startswith('guild:') and mode=='channel':
+            if hasattr(channel,'typing'):
+                async with channel.typing():await asyncio.sleep(.35)
+            last=getattr(channel,'last_message_id',None)
+            if last and str(last)!=str(row['message']):mode='reply';ident=row['message']
+            elif self.db.one("SELECT id FROM kei_social_actions WHERE channel=? AND id!=? AND at>=? AND status IN ('pending','sending')",(row['channel'],row['id'],row['at']-30)):mode='reply';ident=row['message']
         reference = await self.reference(channel, ident) if mode != "channel" else None
         first = None
         for index, chunk in enumerate(chat_chunks(row["content"])):
@@ -242,3 +256,19 @@ class Conversation:
             if first is None:
                 first = str(sent.id)
         return first
+
+    async def finish_search(self, channel, card, content):
+        """Reuse the progress message. Split safely instead of truncating the answer."""
+        parts=chunks(card['header']+'\n'+content)
+        try:
+            message=await channel.fetch_message(int(card['message']))
+            if message.author.id!=channel._state.user.id:return None
+            await message.edit(content=parts[0],allowed_mentions=discord.AllowedMentions.none())
+        except (discord.NotFound,discord.Forbidden,discord.HTTPException,ValueError,TypeError):
+            self.db.execute('UPDATE kei_search_cards SET finished=1 WHERE channel=? AND request=?',(card['channel'],card['request']))
+            return None
+        # Claim the edit before sending continuation chunks. An uncertain send must
+        # never replay the entire response on restart.
+        self.db.execute('UPDATE kei_search_cards SET finished=1 WHERE channel=? AND request=?',(card['channel'],card['request']))
+        for part in parts[1:]:await channel.send(part,allowed_mentions=discord.AllowedMentions.none())
+        return str(message.id)

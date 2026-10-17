@@ -1,4 +1,22 @@
-# Supernova 3.4.0-rc.3 — feature matrix
+# Supernova 4.0.0-rc.1 — feature matrix
+
+## 4.0.0-rc.1 acceptance delta
+
+| Area | Current status | Evidence / remaining limit |
+| --- | --- | --- |
+| Conversation routing, typing, personal names and quiet | Implemented; live acceptance pending | Per-person windows, real interleaving checks, scoped call-name storage and durable quiet rules. Regressions include the reported interrupted exchange and an owner channel stop. |
+| Event-driven relationship progression and natural connections | Implemented; multi-day acceptance partial | No hard six-hour rank confirmation; no user-facing romance controls. Natural two-sided acceptance, exclusivity, breakup and absence are checked independently of operational rights. Simulated days cannot prove actual social quality. |
+| Presence, activity habits, initiative and private occasions | Implemented; availability conditional | Privileged intents are requested only if enabled for the application. Missing/invisible data is not invented. Custom status is untrusted context. Occasions are internal and separately opt-in; owner diagnostics do not expose them in ordinary task lists. |
+| Public daily status | Implemented; live acceptance pending | Same-day public evidence or existing character tastes; no DM/restricted excerpts, source validation and at most hourly selection. Public teasing remains light and sourced. |
+| Search in one message | Implemented; live acceptance pending | Durable status card edited into final answer; successful fetched-page receipts determine source counts. Failure and empty results differ. Confidence alone does not establish truth. |
+| Easier dashboard and connection setup | Implemented; fresh-user acceptance partial | Immediate session restoration state, cached roster presentation, personal names, guided Panel/SSH/local/plugin enrollment, host fingerprint check, live connection tests. OAuth identity/permission/CSRF checks stay server-side. |
+| History/procedural memory and attachments | Implemented; connector acceptance partial | Same-scope original history search and topic expansion; receipt-backed workflows; explicit task-owned file transfer, backup and byte readback. No claim of a new embedding provider or full Hermes runtime migration. |
+| Minecraft task acceptance | **Paused** | Preserve the existing distributable bridge and connectors. Do not restart Minecraft, resume old jobs, change plugins or claim new in-game execution acceptance for this build. |
+
+Validation before deployment: **338 private regressions**, **84 regressions against the stripped public export**, with an import-path check proving the public modules were tested; JavaScript syntax check; real deployment-host snapshot migration preserving 2,107 messages, 105 episodes and 134 memories; actual low-model counter/nickname replays; real Exa search reading two pages from one site; actual Panel status and SSH authentication plus UID-0/scoped folder read. Available Discord presence/member intents were checked from the application API. Browser testing used a disposable local fixture and covered session restoration, the connected-server list and the expanded SSH selector. These are not independent novice setup, sustained live social acceptance or new Minecraft write/action acceptance.
+
+Private regression and deployment receipts are recorded locally. The public distribution excludes private instrumentation, conversations, credentials, persona and operator tests. See docs/RELEASE_4.md for the new setup flow and the remaining acceptance gates.
+
 
 ## 3.4.0-rc.3 task execution follow-up
 

@@ -1,3 +1,3 @@
 """Supernova: social decisions around the existing verified copilot."""
 
-VERSION = "3.4.0-rc.3"
+VERSION = "4.0.0-rc.1"

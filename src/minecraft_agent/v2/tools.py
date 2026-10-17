@@ -46,8 +46,9 @@ def effect_of(name,args):
 def dangerous(name,args):
     text=json.dumps(args,ensure_ascii=False).lower()
     if name=='power' and args.get('action')=='kill':return True
-    if name=='files':
+    if name in ('files','attachment_install'):
         path=args.get('path','').lower()
+        if name=='attachment_install':args={**args,'action':'write'}
         if args.get('action') in ('remove','restore','write') and (path.startswith(('world','playerdata')) or path.endswith(('.mca','.dat','.db'))):return True
     if name=='console' and re.search(r'\b(fill|clone|kill|reload)\b',args.get('command','').lower()):return True
     if name=='remote_shell':

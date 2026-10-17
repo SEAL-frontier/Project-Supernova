@@ -18,6 +18,20 @@ def packed(text, hint=''):
 def unpack(value):
     try:
         d = json.loads(value)
+        for _ in range(4):
+            inner = d.get('text') if isinstance(d, dict) else d
+            if not isinstance(inner, str):
+                break
+            cleaned = inner.replace('\\"', '"')
+            if not cleaned.lstrip().startswith('{'):
+                break
+            try:
+                nested = json.loads(cleaned)
+            except ValueError:
+                break
+            if not isinstance(nested, dict) or 'text' not in nested:
+                break
+            d = {**d, **nested}
         return d if isinstance(d, dict) and 'text' in d else {'text': str(value), 'public_hint': ''}
     except (ValueError, TypeError):
         return {'text': str(value), 'public_hint': ''}
@@ -109,7 +123,7 @@ class Memory:
             return None
         if not any((self.identity.person_for_user(r['user']) == person and r['role'] == 'user' for r in rows)):
             return None
-        content = str(proposal.get('content', '')).strip()[:2500]
+        content = str(unpack(proposal.get('content', '')).get('text', '')).strip()[:2500]
         if not content:
             return None
         if re.search('(?:password|api[_ -]?key|mật khẩu|bearer|-----BEGIN.*PRIVATE KEY)\\s*(?:là|[:=])?\\s+\\S+', content, re.I):
@@ -127,6 +141,8 @@ class Memory:
         boundary_evidence = any((BOUNDARY.search(direct_words(r)) for r in own))
         if kind == 'boundary' and (not boundary_evidence):
             return None
+        from .occasions import learn as learn_occasion
+        learn_occasion(self.db, person, scope, own, sources)
         if kind == 'warm_exchange' and (not any((r['role'] == 'assistant' for r in rows))):
             return None
         if kind in ('warm_exchange', 'nickname', 'conflict', 'reconciliation'):
@@ -178,7 +194,7 @@ class Memory:
         if meaningful <= 5 and new_session:
             profile['familiarity'] = min(1, profile['familiarity'] + 0.01)
         delta = proposal.get('dimensions', {})
-        step = 0.035 if proposal.get('impact') == 'major' and kind in ('conflict', 'reconciliation', 'milestone') else 0.015
+        step = 0.07 if proposal.get('impact') == 'major' and kind in ('conflict', 'reconciliation', 'milestone') else 0.015
         if isinstance(delta, dict):
             for d in DIMS:
                 direction = delta.get(d, 0)
@@ -291,7 +307,7 @@ class Memory:
                 continue
             text = self._visible(row, scope, sharing)
             if text and (not self.db.tombstoned(json.loads(row['sources']))):
-                items.append({'id': row['id'], 'kind': row['kind'], 'content': text, 'source_scope': row['scope']})
+                items.append({'id': row['id'], 'kind': row['kind'], 'content': text, 'source_scope': row['scope'], 'provenance': 'A sourced summary, not independent proof; original human wording outranks inferred emotion or assistant claims.', 'human_excerpt': [direct_words(r)[:240] for source in json.loads(row['sources']) for r in [self.db.one('SELECT user,role,content FROM kei_messages WHERE id=? AND forgotten=0', (source,))] if r and r['role'] == 'user' and (row['scope'] == scope) and (self.identity.person_for_user(r['user']) == person)][:2]})
         episodes = []
         candidates = self.db.rows('SELECT * FROM kei_episodes WHERE person=? ORDER BY importance DESC,at DESC LIMIT 120', (person,))
         if matched:
@@ -308,14 +324,14 @@ class Memory:
             if row['scope'] == scope:
                 episode['original_exchange'] = json.loads(row['quotes'])
             episodes.append(episode)
-            if len(episodes) >= 6:
+            if len(episodes) >= 10:
                 break
         rel = self.relationship(person, scope)
         warmth = rel.get('warmth', 0.5)
         tension = rel.get('tension', 0)
         description = {'rank': {k: v for k, v in rel['rank'].items() if k not in ('pending', 'sources') and (private(scope) or k != 'reason')}, 'interaction_frequency': rel['frequency'], 'familiarity': 'familiar' if rel['familiarity'] >= 0.35 else 'shared history present; judge familiarity from the episodes' if episodes else 'getting acquainted', 'tone': 'warm' if warmth > 0.6 else 'contextual', 'tension': 'recent friction; do not force appeasement' if tension > 0.15 else 'no established conflict', 'addressing': rel.get('addressing', 'follow actual conversation, never invent relationships'), 'boundaries': rel.get('boundaries', ''), 'interests': rel.get('interests', ''), 'continuity': 'Use the actual shared episodes below; low calibration scores do not negate shared history. Playful sulking is character banter, not evidence of genuine hostility.'}
         commitments = self.db.rows("SELECT id,content,due FROM kei_commitments WHERE person=? AND scope=? AND status='open' LIMIT 5", (person, scope))
-        payload = {'relationship': description, 'affect': self.affect.context(person, scope, through), 'memories': items[:12], 'episodes': episodes, 'commitments': commitments, 'group': self.relationships.group(scope, through)}
+        payload = {'relationship': description, 'affect': self.affect.context(person, scope, through), 'memories': items[:24], 'episodes': episodes, 'commitments': commitments, 'group': self.relationships.group(scope, through)}
         budget = self.cfg['memory'].get('memory_context_chars', 32000)
         while len(dumps(payload)) > budget and payload['episodes']:
             payload['episodes'].pop()
@@ -357,6 +373,13 @@ class Memory:
             self.db.execute('DELETE FROM kei_self_opinions WHERE source=?', (source,))
         self.relationships.forget(person, scope, sources)
         self.affect.forget(person, scope, sources)
+        from .occasions import forget as forget_occasions
+        if self.db.one("SELECT name FROM sqlite_master WHERE name='kei_social_occasions'"):
+            forget_occasions(self.db, person, scope, sources)
+        if not ids and scope is None and self.db.one("SELECT name FROM sqlite_master WHERE name='kei_call_names'"):
+            self.db.execute('DELETE FROM kei_call_names WHERE person=?', (person,))
+        if self.db.one("SELECT name FROM sqlite_master WHERE name='kei_social_context'"):
+            self.db.execute('DELETE FROM kei_social_context WHERE person=?', (person,))
         for table in ('kei_social_events', 'kei_memories', 'kei_episodes', 'kei_commitments'):
             for row in self.db.rows('SELECT id,sources FROM ' + table):
                 if sources.intersection(json.loads(row['sources'])):
@@ -367,6 +390,13 @@ class Memory:
             row = self.db.one('SELECT * FROM kei_messages WHERE id=?', (source,))
             if row and row['user'] in account_ids:
                 self.db.forget([row['scope']], [], [source])
+        if self.db.one("SELECT name FROM sqlite_master WHERE name='kei_presence_thoughts'"):
+            for status in self.db.rows('SELECT day,sources FROM kei_presence_thoughts'):
+                if sources.intersection(json.loads(status['sources'])):
+                    self.db.execute('DELETE FROM kei_presence_thoughts WHERE day=?', (status['day'],))
+            callback = getattr(self, 'on_forget', None)
+            if callback:
+                callback()
         if not targets:
             for actor in account_ids:
                 if scope:
@@ -424,7 +454,7 @@ class Memory:
         authors = {r['user']: self.identity.person_for_user(r['user']) for r in rows if r['role'] == 'user'}
         known = self.db.rows('SELECT id,person,kind,content FROM kei_memories WHERE scope=? AND active=1 ORDER BY at DESC LIMIT 60', (scope,))
         known_episodes = self.db.rows('SELECT id,person,title,summary,sources FROM kei_episodes WHERE scope=? ORDER BY at DESC LIMIT 60', (scope,))
-        definition = tool('memory_pass', 'Select evidence-backed meaningful memories. Preserve recurring playful nicknames, their origin, characteristic reactions and how teasing softens or reconciles as warm_exchange episodes, including BOTH user and assistant source IDs. This distinctive relationship history is not disposable routine banter. Character sulking is not genuine hostility. Skip isolated exclamations, acknowledgments and operational logs. Never treat quoted fiction or assistant claims as user facts. Reuse known episodes; do not duplicate their evidence.', {'items': {'type': 'array', 'items': {'type': 'object', 'properties': {'person': S, 'kind': S, 'content': S, 'public_hint': S, 'shareability': S, 'alias': S, 'sources': {'type': 'array', 'items': S}, 'title': S, 'addressing': S, 'boundaries': S, 'interests': S, 'dimensions': {'type': 'object', 'properties': {d: {'type': 'number', 'minimum': -1, 'maximum': 1} for d in DIMS}}}, 'required': ['person', 'kind', 'content', 'sources', 'shareability']}}, 'supersede_ids': {'type': 'array', 'items': S}, 'replacements': {'type': 'array', 'items': {'type': 'object', 'properties': {'old_id': S, 'new_content': S, 'person': S, 'sources': {'type': 'array', 'items': S}}, 'required': ['old_id', 'new_content', 'person', 'sources']}}, 'ranks': {'type': 'array', 'items': {'type': 'object', 'properties': {'person': S, 'label': S, 'category': S, 'reason': S, 'sources': {'type': 'array', 'items': S}}, 'required': ['person', 'label', 'category', 'reason', 'sources']}}, 'summary': S, 'group': {'type': 'object', 'properties': {'culture': S, 'observations': {'type': 'array', 'items': {'type': 'object', 'properties': {'kind': S, 'content': S, 'sources': {'type': 'array', 'items': S}}, 'required': ['kind', 'content', 'sources']}}, 'inside_jokes': {'type': 'array', 'items': S}, 'boundaries': S, 'members': {'type': 'array', 'items': {'type': 'object', 'properties': {'person': S, 'style': S}, 'required': ['person', 'style']}}, 'relationships': {'type': 'array', 'items': {'type': 'object', 'properties': {'person_a': S, 'person_b': S, 'summary': S, 'sources': {'type': 'array', 'items': S}}, 'required': ['person_a', 'person_b', 'summary', 'sources']}}}}}, ['items', 'supersede_ids', 'summary'])
+        definition = tool('memory_pass', 'Select evidence-backed meaningful memories. Preserve recurring playful nicknames, their origin, characteristic reactions and how teasing softens or reconciles as warm_exchange episodes, including BOTH user and assistant source IDs. This distinctive relationship history is not disposable routine banter. Character sulking is not genuine hostility. Skip isolated exclamations, acknowledgments and operational logs. Never treat quoted fiction or assistant claims as user facts. Reuse known episodes; do not duplicate their evidence.', {'items': {'type': 'array', 'items': {'type': 'object', 'properties': {'person': S, 'kind': S, 'content': S, 'public_hint': S, 'shareability': S, 'alias': S, 'sources': {'type': 'array', 'items': S}, 'title': S, 'addressing': S, 'boundaries': S, 'interests': S, 'impact': {'type': 'string', 'enum': ['minor', 'major']}, 'dimensions': {'type': 'object', 'properties': {d: {'type': 'number', 'minimum': -1, 'maximum': 1} for d in DIMS}}}, 'required': ['person', 'kind', 'content', 'sources', 'shareability']}}, 'supersede_ids': {'type': 'array', 'items': S}, 'replacements': {'type': 'array', 'items': {'type': 'object', 'properties': {'old_id': S, 'new_content': S, 'person': S, 'sources': {'type': 'array', 'items': S}}, 'required': ['old_id', 'new_content', 'person', 'sources']}}, 'ranks': {'type': 'array', 'items': {'type': 'object', 'properties': {'person': S, 'label': S, 'category': S, 'impact': {'type': 'string', 'enum': ['minor', 'major']}, 'reason': S, 'sources': {'type': 'array', 'items': S}}, 'required': ['person', 'label', 'category', 'reason', 'sources']}}, 'summary': S, 'group': {'type': 'object', 'properties': {'culture': S, 'observations': {'type': 'array', 'items': {'type': 'object', 'properties': {'kind': S, 'content': S, 'sources': {'type': 'array', 'items': S}}, 'required': ['kind', 'content', 'sources']}}, 'inside_jokes': {'type': 'array', 'items': S}, 'boundaries': S, 'members': {'type': 'array', 'items': {'type': 'object', 'properties': {'person': S, 'style': S}, 'required': ['person', 'style']}}, 'relationships': {'type': 'array', 'items': {'type': 'object', 'properties': {'person_a': S, 'person_b': S, 'summary': S, 'sources': {'type': 'array', 'items': S}}, 'required': ['person_a', 'person_b', 'summary', 'sources']}}}}}, ['items', 'supersede_ids', 'summary'])
         generation = self.db.one("SELECT value FROM kei_meta WHERE key='memory-forget-generation'")
         response = await self.model.chat([{'role': 'system', 'content': "Memory consolidation. Scope is fixed; do not cross it. Return memory_pass. Deep pass organizes/deduplicates while keeping meaningful original episodes, including their origin and resolution. Preserve recurring jokes, small conversations and playful arguments with both sides' original source IDs. Facts are based on users, not prior assistant assertions or quoted reply text. Describe observable words without guessing hidden motives, fear or distress. A user's boundaries must come from their own requests, never an assistant's demands. Character annoyance never blocks legitimate assigned work. Include a descriptive episode title. Group observations need source IDs; describe an observed joke/topic/nickname/pattern, not assumed traits or hidden relationships. Suggest a rank only for a grounded stable change, with cited sources; Neutral/Warm/Friend/Trusted/Close/Tense/Distant are examples, custom concise labels are allowed. No unsupported romance or hostility. Use replacements only for an explicit sourced contradiction or true duplicate; bare supersede_ids never suffice. Summary must carry forward still-relevant earlier topics and commitments. No credentials or raw scores."}, {'role': 'user', 'content': dumps({'scope': scope, 'deep': deep, 'authors': authors, 'messages': rows, 'known': known, 'known_episodes': known_episodes, 'relationships': {p: {k: v for k, v in self.relationship(p, scope).items() if k != 'frequency'} for p in set(authors.values())}, 'known_group': self.relationships.group(scope), 'previous_summary': (self.db.one('SELECT content FROM kei_summaries WHERE scope=?', (scope,)) or {}).get('content', '')[:12000]})}], [definition], tool_choice={'type': 'function', 'function': {'name': 'memory_pass'}}, max_tokens=5000)
         if generation != self.db.one("SELECT value FROM kei_meta WHERE key='memory-forget-generation'"):

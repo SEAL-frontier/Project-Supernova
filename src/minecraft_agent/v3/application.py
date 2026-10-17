@@ -118,6 +118,50 @@ class Kei(LegacyKei):
         self.followup_turns = {}
         self.channel_speakers = {}
         self.search_cards = {}
+        self.typing_leases = {}
+        self.engine.typing_observer = self.begin_typing
+        self.engine.typing_end_observer = self.end_typing
+        from .presence import DailyPresence
+        self.daily_presence = DailyPresence(store, cfg, model)
+        self.engine.memory.on_forget = self.invalidate_presence
+
+    def invalidate_presence(self):
+        text = getattr(self, 'last_presence_thought', None)
+        if text and (not self.store.one('SELECT day FROM kei_presence_thoughts WHERE text=?', (text,))):
+            self.last_presence_thought = None
+            asyncio.create_task(self.change_presence(activity=discord.Game(name='Kei ' + VERSION + ' · Supernova')))
+
+    async def configure_social_intents(self):
+        try:
+            info = await self.application_info()
+            enabled = bool(info.flags.gateway_presence or info.flags.gateway_presence_limited)
+            self._connection._intents.presences = enabled
+            if enabled:
+                self._connection._intents.members = bool(info.flags.gateway_guild_members or info.flags.gateway_guild_members_limited)
+            self._connection.member_cache_flags = discord.MemberCacheFlags.from_intents(self._connection._intents)
+            self._connection._chunk_guilds = bool(self._connection._intents.members)
+        except discord.HTTPException:
+            LOG.info('Presence metadata unavailable')
+
+    async def on_presence_update(self, before, after):
+        person = self.store.one("SELECT person FROM kei_accounts WHERE platform='discord' AND account=?", (str(after.id),))
+        if not person:
+            return
+        person = person['person']
+        pref = self.engine.memory.preference(person)
+        if pref.get('muted'):
+            return
+        for row in self.store.rows('SELECT scope,data,at FROM kei_social_context WHERE person=?', (person,)):
+            if time.time() - row['at'] > 1800 and (not (pref.get('dm_opt_in') and row['scope'].startswith('dm:'))):
+                continue
+            if not (row['scope'].startswith('dm:') or row['scope'].startswith('guild:' + str(after.guild.id) + ':')):
+                continue
+            data = json.loads(row['data'])
+            data.update(presence=str(after.status), status_available=True, custom_status=None, observed_at=time.time())
+            for activity in after.activities:
+                if isinstance(activity, discord.CustomActivity):
+                    data['custom_status'] = str(activity.name or activity.state or '')[:200]
+            self.store.execute('UPDATE kei_social_context SET data=?,at=? WHERE person=? AND scope=?', (json.dumps(data), time.time(), person, row['scope']))
 
     async def monitor_loop(self):
         await self.wait_until_ready()
@@ -164,40 +208,40 @@ class Kei(LegacyKei):
     async def search_status(self, channel, request, phase, **data):
         if str(channel).startswith('mc:'):
             return
-        key = (str(channel), str(request))
-        reference_target = request
-        if str(request).startswith('task:'):
-            origin = self.store.one('SELECT message FROM kei_task_origins WHERE task=?', (str(request)[5:],))
-            reference_target = origin['message'] if origin else None
-        card = self.search_cards.get(key)
-        now = time.monotonic()
-        if phase == 'searching':
+        channel, request = (str(channel), str(request))
+        card = self.store.one('SELECT * FROM kei_search_cards WHERE channel=? AND request=?', (channel, request))
+        if card and card['finished']:
+            return
+        receipts = json.loads(card['receipts']) if card else []
+        for receipt in data.get('receipts', []):
+            if receipt.get('url') and receipt.get('domain') and (not any((p['url'] == receipt['url'] for p in receipts))):
+                receipts.append(receipt)
+        if phase == 'done':
+            sites = len({r['domain'] for r in receipts})
+            text = '-# Searched ' + str(sites) + (' site' if sites == 1 else ' sites') if sites else '-# Search unavailable' if data.get('status') == 'error' or data.get('errors') else '-# No matching sources' if data.get('status') == 'empty' else '-# Results found · source pages unavailable'
+        elif phase == 'searching':
             text = '-# Searching…'
-        elif phase == 'done':
-            text = '-# Search failed · thử lại sau' if data.get('status') == 'error' else '-# Không có kết quả phù hợp' if data.get('status') == 'empty' else '-# Searched ' + str(data.get('sites', 0)) + ' sites' if data.get('sites') else '-# Tìm được kết quả · chưa đọc được trang nguồn'
         else:
             text = '-# Searching… ' + str(data.get('pages', 0)) + ' pages · ' + str(data.get('domain', ''))[:80]
-        if card and phase != 'done' and (now - card['at'] < 1.5):
+        now = time.time()
+        if card and phase not in ('done', 'searching') and (now - card['at'] < 2):
             return
-        target = None
         try:
             target = await self.destination(channel)
             if card:
-                await target.get_partial_message(card['id']).edit(content=text, allowed_mentions=discord.AllowedMentions.none())
-                card['at'] = now
-            else:
+                try:
+                    await target.get_partial_message(int(card['message'])).edit(content=text, allowed_mentions=discord.AllowedMentions.none())
+                except discord.NotFound:
+                    card = None
+            if not card:
+                reference_target = request
+                if request.startswith('task:'):
+                    origin = self.store.one('SELECT message FROM kei_task_origins WHERE task=?', (request[5:],))
+                    reference_target = origin['message'] if origin else None
                 reference = await self.engine.conversation.reference(target, reference_target)
                 message = await target.send(text, reference=reference, allowed_mentions=discord.AllowedMentions.none())
-                self.search_cards[key] = {'id': message.id, 'at': now}
-        except discord.NotFound:
-            self.search_cards.pop(key, None)
-            if card and target is not None:
-                try:
-                    reference = await self.engine.conversation.reference(target, reference_target)
-                    message = await target.send(text, reference=reference, allowed_mentions=discord.AllowedMentions.none())
-                    self.search_cards[key] = {'id': message.id, 'at': now}
-                except discord.HTTPException as exc:
-                    LOG.warning('Search status replacement deferred (%s)', type(exc).__name__)
+                card = {'message': str(message.id)}
+            self.store.execute('INSERT OR REPLACE INTO kei_search_cards VALUES (?,?,?,?,?,?,0)', (channel, request, card['message'], text, json.dumps(receipts), now))
         except discord.HTTPException as exc:
             LOG.warning('Search status deferred (%s)', type(exc).__name__)
 
@@ -320,6 +364,7 @@ class Kei(LegacyKei):
         await super().on_interaction(interaction)
 
     async def setup_hook(self):
+        await self.configure_social_intents()
         for task in self.store.rows("SELECT * FROM kei_tasks WHERE status='waiting' AND pending IS NOT NULL"):
             try:
                 pending = json.loads(task['pending'])
@@ -348,7 +393,7 @@ class Kei(LegacyKei):
     async def on_ready(self):
         await super().on_ready()
         await self.change_presence(activity=discord.Game(name='Kei ' + VERSION + ' · Supernova'))
-        LOG.info('KEI_READY version=%s bot_id=%s model=%s servers=%s', VERSION, self.user.id, self.engine.model.model, ','.join(self.engine.servers))
+        LOG.info('KEI_READY version=%s bot_id=%s model=%s servers=%s presence=%s member_cache=%s cached_members=%s', VERSION, self.user.id, self.engine.model.model, ','.join(self.engine.servers), self.intents.presences, self._connection.member_cache_flags.joined, sum((len(g.members) for g in self.guilds)))
 
     def mark_exchange(self, channel, actor, message=None):
         key = (str(channel), str(actor))
@@ -367,9 +412,12 @@ class Kei(LegacyKei):
         scope = 'dm:' + user if guild is None else 'guild:' + str(guild.id) + ':' + channel
         person = self.engine.identity.resolve('discord', user)
         aliases = self.cfg['social'].get('triggers', ['kei']) + [r['alias'] for r in self.store.rows("SELECT alias FROM kei_aliases WHERE person=? AND (?='discreet' OR scope=?) AND NOT EXISTS (SELECT 1 FROM json_each(kei_aliases.sources) s JOIN kei_forget_tombstones f ON f.source=s.value)", (person, self.engine.memory.preference(person)['sharing'], scope))]
+        from .social_runtime import names as call_names, capture as capture_environment
+        manual_names = call_names(self.store, person)
+        aliases += manual_names
         named = bool(nickname(message.content, self.cfg['social'].get('triggers', ['kei'])))
         learned = bool(nickname(message.content, [a for a in aliases if a not in self.cfg['social'].get('triggers', ['kei'])]))
-        strong = guild is None or self.user in message.mentions or named or message.content.startswith('kei!')
+        strong = guild is None or self.user in message.mentions or named or bool(nickname(message.content, manual_names)) or message.content.startswith('kei!')
         direct = guild is None or self.user in message.mentions or bool(nickname(message.content, aliases)) or message.content.startswith('kei!')
         to_other = False
         if message.reference:
@@ -408,6 +456,10 @@ class Kei(LegacyKei):
             return
         if following and (not direct):
             self.followup_turns[channel, user] = self.followup_turns.get((channel, user), 0) + 1
+        member = message.author
+        if guild is None:
+            member = next((g.get_member(message.author.id) for g in self.guilds if g.get_member(message.author.id)), message.author)
+        capture_environment(self.store, person, scope, member, message.channel, available=bool(self.intents.presences))
         if guild:
             restricted = not message.channel.permissions_for(guild.default_role).view_channel
             self.store.execute('INSERT OR REPLACE INTO kei_meta VALUES (?,?)', ('scope-visibility:' + scope, 'restricted' if restricted else 'group'))
@@ -416,21 +468,40 @@ class Kei(LegacyKei):
         if self.store.one('SELECT id FROM kei_messages WHERE id=?', (str(message.id),)):
             self.store.execute('INSERT OR REPLACE INTO kei_event_meta VALUES (?,?,?,?,?,?,?,?,?)', (str(message.id), 'discord', person, user, '', scope, channel, 1 if strong else 3 if learned else 2 if following else 0, time.time()))
 
+    async def begin_typing(self, channel, request):
+        if str(channel).startswith('mc:'):
+            return
+        key = (str(channel), str(request))
+        if key in self.typing_leases:
+            return
+
+        async def pulse():
+            try:
+                await asyncio.sleep(0.9)
+                while True:
+                    await self.http.send_typing(int(channel))
+                    await asyncio.sleep(7)
+            except asyncio.CancelledError:
+                raise
+            except discord.HTTPException:
+                pass
+        self.typing_leases[key] = asyncio.create_task(pulse())
+
+    def end_typing(self, channel, request):
+        job = self.typing_leases.pop((str(channel), str(request)), None)
+        if job:
+            job.cancel()
+
     @asynccontextmanager
     async def conversation_typing(self, channel, scope, user):
-        person = self.engine.identity.person_for_user(user)
-        latest = self.engine.db.one("SELECT content FROM kei_messages WHERE scope=? AND user=? AND role='user' ORDER BY at DESC LIMIT 1", (scope, str(user)))
-        quiet = self.engine.quiet.active(scope, person) or bool(latest and asks_quiet(latest['content']))
-        if scope.startswith('dm:') and (not self.engine.memory.preference(person).get('muted')) and (not quiet):
-            async with channel.typing():
-                yield
-        else:
-            yield
+        yield
 
     async def flush(self, key):
         while key in self.buffers:
             batch = self.buffers[key]
-            remaining = min(1.2 - (time.monotonic() - batch['last']), 5 - (time.monotonic() - batch['first']))
+            text = ' '.join((t for _, t in batch['messages'])).strip()
+            unfinished = bool(re.search('(?:\\.\\.\\.|…|nên là|của|nó học|học cách|vì|because|so|and|but)\\s*$', text, re.I))
+            remaining = min((2.8 if unfinished else 1.6) - (time.monotonic() - batch['last']), 8 - (time.monotonic() - batch['first']))
             if remaining > 0:
                 await asyncio.sleep(min(remaining, 0.2))
                 continue
@@ -441,8 +512,11 @@ class Kei(LegacyKei):
                 await self.engine.conversation.capture(channel, key[0], batch['user'], ids)
                 async with self.conversation_typing(channel, key[0], batch['user']):
                     await self.engine.converse(batch['user'], key[0], str(channel.id), '\n'.join((t for _, t in batch['messages'])), ids)
+                if not self.store.one("SELECT id FROM kei_social_actions WHERE channel=? AND message=? AND kind IN ('reply','short_reply') AND status IN ('pending','sending')", (str(channel.id), ids[-1])):
+                    self.end_typing(str(channel.id), ids[-1])
             except Exception as exc:
                 LOG.warning('CONVERSATION_FAILED error=%s', type(exc).__name__)
+                self.end_typing(str(channel.id), ids[-1])
                 self.engine.conversation.queue(str(channel.id), ids[-1], 'reply', 'Kei bị lỗi xử lý lượt này rồi. Nhắn lại giúp em một lần nhé.', key[0], batch['user'])
 
     async def command(self, message, scope, text):
@@ -485,15 +559,27 @@ class Kei(LegacyKei):
             self.store.execute('DELETE FROM kei_inbox WHERE at<?', (time.time() - 7 * 86400,))
             await asyncio.sleep(300)
 
+    async def update_daily_presence(self):
+        thought = await self.daily_presence.choose()
+        if thought and thought != getattr(self, 'last_presence_thought', None):
+            await self.change_presence(activity=discord.CustomActivity(name=thought))
+            self.last_presence_thought = thought
+            self.store.execute('UPDATE kei_presence_thoughts SET delivered=? WHERE text=?', (time.time(), thought))
+        elif not thought and getattr(self, 'last_presence_thought', None):
+            await self.change_presence(activity=discord.Game(name='Kei ' + VERSION + ' · Supernova'))
+            self.last_presence_thought = None
+
     async def social_background(self):
         await self.wait_until_ready()
         await asyncio.sleep(20)
         while not self.is_closed():
-            try:
-                await self.engine.social_maintenance()
-                await self.engine.proactive()
-            except Exception as exc:
-                LOG.warning('Social background deferred (%s)', type(exc).__name__)
+            for job in (self.update_daily_presence, self.engine.proactive, self.engine.social_maintenance):
+                try:
+                    await job()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    LOG.warning('Social background deferred job=%s type=%s', job.__name__, type(exc).__name__)
             await asyncio.sleep(300)
 
     async def rank_notifications(self):
@@ -520,10 +606,15 @@ class Kei(LegacyKei):
                     task = self.store.one('SELECT o.* FROM kei_task_outbox m JOIN kei_task_origins o ON o.task=m.task WHERE m.outbox=?', (row['id'],))
                     if task:
                         self.mark_exchange(row['channel'], task['actor'])
-                    if task and task['scope'].startswith('guild:') and (not row['channel'].startswith('mc:')):
+                    if task and (not row['channel'].startswith('mc:')):
                         reference = await self.engine.conversation.reference(channel, task['message'])
                     extra = {'reference': reference} if reference else {}
-                    sent = await channel.send(row['content'], allowed_mentions=discord.AllowedMentions.none(), view=view, **extra)
+                    search = self.store.one("SELECT c.* FROM kei_search_cards c JOIN kei_task_outbox o ON c.request='task:'||o.task WHERE o.outbox=? AND c.finished=0 AND c.at>?", (row['id'], time.time() - 3600)) if not view else None
+                    edited = await self.engine.conversation.finish_search(channel, search, row['content']) if search else None
+                    if edited:
+                        sent = type('EditedSearch', (), {'id': edited})()
+                    else:
+                        sent = await channel.send(row['content'], allowed_mentions=discord.AllowedMentions.none(), view=view, **extra)
                     self.store.execute("UPDATE kei_outbox SET status='sent',message=? WHERE id=?", (str(sent.id), row['id']))
                 except (discord.Forbidden, discord.NotFound):
                     self.store.execute("UPDATE kei_outbox SET status='failed' WHERE id=?", (row['id'],))
@@ -545,7 +636,10 @@ class Kei(LegacyKei):
                                 await self.http.send_typing(int(row['channel']))
                             except discord.HTTPException:
                                 pass
-                        sent = await self.engine.conversation.deliver(channel, row)
+                        try:
+                            sent = await self.engine.conversation.deliver(channel, row)
+                        finally:
+                            self.end_typing(row['channel'], row['message'])
                         if sent and row['kind'] in ('reply', 'short_reply'):
                             recipient = self.store.one('SELECT actor FROM kei_delivery_targets WHERE action=?', (row['id'],))
                             if recipient:
@@ -698,6 +792,12 @@ class Kei(LegacyKei):
             LOG.warning('Minecraft turn failed (%s)', type(exc).__name__)
 
     async def close(self):
+        leases = list(self.typing_leases.values())
+        for lease in leases:
+            lease.cancel()
+        if leases:
+            await asyncio.gather(*leases, return_exceptions=True)
+        self.typing_leases.clear()
         await self.ux.close()
         await self.bridge.close()
         await super().close()
