@@ -41,16 +41,15 @@ class Progress:
     def event(self,k,kind,text):
         if kind not in ('command','log'):return
         # Store only the recent tail, already redacted; never entire files or credentials.
+        if kind=='command':
+            self.db.execute('UPDATE kei_progress SET command=?,log=?,updated=? WHERE task=?',(self.clean(text,500),'',time.time(),k))
+            return
         if kind=='log':
             row=self.db.one('SELECT log FROM kei_progress WHERE task=?',(k,))
             text=(row['log'] if row else '')+text
         self.db.execute('UPDATE kei_progress SET '+kind+'=?,updated=? WHERE task=?',(self.clean(text,1100 if kind=='log' else 500),time.time(),k))
     def complete(self,k):
-        row=self.db.one('SELECT steps FROM kei_progress WHERE task=?',(k,))
-        steps=json.loads(row['steps'])
-        for s in steps:
-            if s['state']!='skipped':s['state']='done'
-        self.db.execute('UPDATE kei_progress SET steps=?,phase=?,updated=? WHERE task=?',(dumps(steps),'Đã kiểm chứng kết quả',time.time(),k))
+        self.phase(k,'Đã có kết quả')
 
 
 def render(task,progress,mode,note=False):
@@ -61,6 +60,7 @@ def render(task,progress,mode,note=False):
     objective=task['goal'].split('\nAdditional requester instruction:',1)[0]
     lines=[clean(objective,110)]
     if task['status']=='running':lines+=['','**Đang:** '+clean(re.sub(r'^(?:Đang[ :]+)+','',progress['phase'],flags=re.I),100)]
+    elif task['status']=='succeeded' and task.get('result'):lines+=['','**Tóm tắt kết quả xử lý:** '+clean(task['result'],600)]
     elif task['status'] in ('paused','failed','reconcile') and task.get('result'):lines+=['','**Chưa xong:** '+clean(task['result'],280)]
     icons={'pending':'☐','running':'◉','done':'☑','skipped':'—'}
     steps=json.loads(progress['steps'])
@@ -75,7 +75,7 @@ def render(task,progress,mode,note=False):
         if progress['command']:logs.append('> '+clean(progress['command'],300))
         if progress['log']:
             logs += ['— output gần nhất —']+[clean(s,140) for s in progress['log'].splitlines()[-5:]]
-        if logs:lines+=['','```text\n'+'\n'.join(logs)[:1050]+'\n```']
+        if logs:lines+=['','-# Bước gần nhất · chi tiết thao tác, không phải kết luận.','```text\n'+'\n'.join(logs)[:1050]+'\n```']
     embed={'title':f"Kei · {clean(task['server'],40)} · {LABELS.get(task['status'],task['status'])}",
            'description':'\n'.join(lines),'color':0xEFA5A5}
     hint='-# `/debug mode:off` để ẩn; `minimal` chỉ checklist, `advanced` thêm lệnh/log. Lưu riêng cho bạn.' if note else ''
@@ -101,13 +101,14 @@ class Reporter:
             row=self.db.one('SELECT * FROM kei_progress WHERE task=?',(k,))
             pref=self.db.one('SELECT * FROM kei_debug_preferences WHERE user=?',(user,))
             note=bool(card['note']) if card else not(pref and pref['note_seen'])
-            safe_task={**task,'goal':self.progress.clean(task['goal'].split('\nAdditional requester instruction:',1)[0],2000)}
+            safe_task={**task,'goal':self.progress.clean(task['goal'].split('\nAdditional requester instruction:',1)[0],2000),'result':redact(str(task.get('result') or ''),self.progress.secrets)}
             payload=render(safe_task,row,mode,note)
             content=dumps(payload) if payload is not None else None
             if card and content==card['content']:continue
             if not card:self.db.execute('INSERT INTO kei_debug_cards(task) VALUES (?)',(k,));card=self.db.one('SELECT * FROM kei_debug_cards WHERE task=?',(k,))
             try:
                 target=await self.destination(channel)
+                if self.can_report and not self.can_report(task):continue
                 if content is None:
                     if card['message']:await target.get_partial_message(int(card['message'])).delete()
                     message=None
@@ -121,6 +122,7 @@ class Reporter:
                     if self.reference_for_task:
                         reference=await self.reference_for_task(task,target)
                         if reference:extra['reference']=reference
+                    if self.can_report and not self.can_report(task):continue
                     sent=await target.send(payload['content'] or None,embed=discord.Embed.from_dict(payload['embed']),allowed_mentions=discord.AllowedMentions.none(),**extra);message=str(sent.id)
                 completed=self.clock()
                 self.db.execute('UPDATE kei_debug_cards SET message=?,content=?,next_at=?,note=?,blocked=0 WHERE task=?',

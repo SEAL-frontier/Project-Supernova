@@ -150,7 +150,7 @@ class Engine:
                 # Changing a request invalidates the exact dangerous step previously offered.
                 history=[m for m in json.loads(task['history']) if not (m.get('role')=='system' and ('Finalize now:' in m.get('content','') or 'This is a SIMPLE task.' in m.get('content','')))];pending=json.loads(task['pending']) if task['pending'] else None
                 if pending:history.append({'role':'tool','tool_call_id':pending['call_id'],'content':dumps({'not_executed':'Superseded by requester change; replan before any action'})})
-                changes.update(status='queued',pending=None,history=dumps(history))
+                changes.update(status='queued',pending=None,history=self.stored_task_history(history))
             self.db.update_task(task['id'],**changes)
             if changes.get('status')=='queued':self.launch(task['id'])
             return {'updated':True}
@@ -168,11 +168,18 @@ class Engine:
     def execution_context(self,task):return ''
     def available_tools(self,task,tools):return tools
     def completion_missing(self,actions):return missing_verification(actions)
+    def stored_task_history(self,history):
+        from ..v3.continuity import MARKER
+        return dumps([m for m in history if not (m.get('role')=='user' and str(m.get('content','')).startswith(MARKER))])
+    async def validate_task_context(self,k):
+        return True
     async def run(self,k):
         task=self.db.one('SELECT * FROM kei_tasks WHERE id=?',(k,))
+        if not await self.validate_task_context(k):return
         if not task:return
         self.progress.start(k)
         async with self.locks[task['server']]:
+            if not await self.validate_task_context(k):return
             task=self.db.one('SELECT * FROM kei_tasks WHERE id=?',(k,))
             if task['status'] not in ('queued','paused'):return
             # Recheck assignment at dispatch, not only when task was created.
@@ -206,6 +213,7 @@ class Engine:
             try:
                 pending=json.loads(task['pending']) if task['pending'] else None
                 if pending and pending.get('confirmed'):
+                    if not await self.validate_task_context(k):return
                     mutated=effect_of(pending['name'],pending['args'])!='read' or mutated
                     result=await self.action(k,pending['name'],pending['args'],executor,task['mode'],True)
                     history.append({'role':'tool','tool_call_id':pending['call_id'],'content':dumps(result)})
@@ -221,6 +229,7 @@ class Engine:
                 watchdog=TaskWatchdog(self.db,k,task['goal'])
                 turn=0;empty_turns=0;status_only_turns=0;status_only_since=None;repeats={};finish_rejections=0
                 while True:
+                    if not await self.validate_task_context(k):return
                     history[0]['content']=system.replace(initial_persona,persona_prompt(self.cfg,self.db,task['requester']),1)
                     current=self.db.one('SELECT * FROM kei_tasks WHERE id=?',(k,))
                     if current['status'] in ('cancelled','paused'):return
@@ -231,6 +240,7 @@ class Engine:
                     self.progress.phase(k,'Đang chọn bước tiếp theo theo kết quả vừa đọc')
                     import httpx
                     for attempt in range(3):
+                        if not await self.validate_task_context(k):return
                         try:
                             response=await self.model.chat(history+image_messages(self.db,task['scope']),tools,max_tokens=2000 if simple else 5000)
                             break
@@ -239,6 +249,7 @@ class Engine:
                             if attempt==2:raise AgentFrozen('Model không phản hồi sau 3 lần kết nối; chưa gửi lại thao tác thay đổi.') from network
                             self.progress.phase(k,'Kết nối lại model; giữ nguyên tiến độ')
                             await asyncio.sleep(2*(attempt+1))
+                    if not await self.validate_task_context(k):return
                     latest=self.db.one('SELECT status,goal FROM kei_tasks WHERE id=?',(k,))
                     if latest['status'] in ('cancelled','paused'):return
                     if latest['goal']!=prior_goal:
@@ -258,6 +269,7 @@ class Engine:
                     else:status_only_since=None
                     history.append(response)
                     for index,call in enumerate(tcalls):
+                        if not await self.validate_task_context(k):return
                         latest=self.db.one('SELECT status,goal FROM kei_tasks WHERE id=?',(k,))
                         if latest['status'] in ('cancelled','paused'):return
                         if latest['goal']!=prior_goal:
@@ -280,7 +292,7 @@ class Engine:
                             for remaining in tcalls[index:]:history.append({'role':'tool','tool_call_id':remaining['id'],'content':dumps({'finished':remaining is call,'skipped':remaining is not call})})
                             summary=args.get('summary','')
                             if args.get('success') and not succeeded:summary='Kei chưa có bằng chứng thực thi cho mục tiêu này; chưa thể xác nhận hoàn tất.'
-                            self.db.update_task(k,status='succeeded' if succeeded else 'failed',result=summary,history=dumps(history))
+                            self.db.update_task(k,status='succeeded' if succeeded else 'failed',result=summary,history=self.stored_task_history(history))
                             if succeeded:
                                 from ..v3.knowledge import Knowledge
                                 try:Knowledge(self.db).learn(self.db.one('SELECT * FROM kei_tasks WHERE id=?',(k,)),self.completion_missing)
@@ -294,20 +306,22 @@ class Engine:
                             except ValueError as exc:result={'error':str(exc)}
                         elif name=='ask_requester':
                             for remaining in tcalls[index:]:history.append({'role':'tool','tool_call_id':remaining['id'],'content':dumps({'waiting_for_requester':True,'not_executed':True})})
-                            self.db.update_task(k,status='paused',result=args['question'],history=dumps(history));self.task_notice(task,args['question']);return
+                            self.db.update_task(k,status='paused',result=args['question'],history=self.stored_task_history(history));self.task_notice(task,args['question']);return
                         else:
                             try:
                                 if task['mode']=='observe' and effect_of(name,args)!='read':
                                     result={'error':'This is observation only; do not mutate or ask for routine repair approval. Report findings or request explicit repair.'}
                                 else:
-                                    if await self.approval_required(k,name,args):raise DangerousAction('Requires requester confirmation')
+                                    needs_approval=await self.approval_required(k,name,args)
+                                    if not await self.validate_task_context(k):return
+                                    if needs_approval:raise DangerousAction('Requires requester confirmation')
                                     if effect_of(name,args)!='read':mutated=True
                                     result=await self.action(k,name,args,executor,task['mode'])
                             except DangerousAction:
                                 # Resolve the other parallel calls as skipped; preserve only this exact step for confirmation.
                                 for remaining in tcalls[index+1:]:history.append({'role':'tool','tool_call_id':remaining['id'],'content':dumps({'skipped':'Waiting for dangerous step confirmation'})})
                                 p={'name':name,'args':args,'call_id':call['id'],'confirmed':False}
-                                self.db.update_task(k,status='waiting',history=dumps(history),pending=dumps(p))
+                                self.db.update_task(k,status='waiting',history=self.stored_task_history(history),pending=dumps(p))
                                 self.request_approval(task,name,args,p,executor)
                                 return
                         if name not in ('update_plan','update_progress','ask_requester'):
@@ -320,11 +334,11 @@ class Engine:
                             count,since=repeats.get(signature,(0,time.monotonic()));repeats[signature]=(count+1,since)
                             if count>=5 and time.monotonic()-since>=180 and (result.get('error') or result.get('blocked') or result.get('verified') is False):raise AgentFrozen('Cùng một bước đã trả về kết quả không đổi nhiều lần; cần đổi cách xử lý hoặc bổ sung dữ kiện.')
                         history.append({'role':'tool','tool_call_id':call['id'],'content':dumps(result)[:55000]})
-                    self.db.update_task(k,history=dumps(history))
+                    self.db.update_task(k,history=self.stored_task_history(history))
 
             except Exception as exc:
                 uncertain=self.db.one("SELECT id FROM kei_actions WHERE task=? AND effect!='read' AND status='started'",(k,))
-                self.db.update_task(k,status='reconcile' if uncertain else 'failed',history=dumps(history),result=redact(str(exc).strip() or type(exc).__name__,executor.secrets))
+                self.db.update_task(k,status='reconcile' if uncertain else 'failed',history=self.stored_task_history(history),result=redact(str(exc).strip() or type(exc).__name__,executor.secrets))
                 if isinstance(exc,AgentFrozen) and not uncertain:self.db.update_task(k,status='paused')
                 self.deliver_task_result(task,('Kei đang bị kẹt: ' if isinstance(exc,AgentFrozen) else 'Kei chưa hoàn tất: ')+redact(str(exc).strip() or type(exc).__name__,executor.secrets)[:500]+('. Cần kiểm tra trạng thái thực tế trước khi thử lại.' if uncertain else '.'))
                 LOG.error('Task %s failed: %s',k,redact(str(exc).strip() or type(exc).__name__,executor.secrets))
@@ -343,6 +357,8 @@ class Engine:
         return dangerous(name,args)
 
     async def action(self,k,name,args,executor,mode,confirmed=False):
+        if not await self.validate_task_context(k):
+            return {'blocked':True,'verified':False,'error':'Request context unavailable; no operation executed.'}
         effect=effect_of(name,args)
         if mode=='observe' and effect!='read':return {'error':'Observation does not authorize modification. Requester must ask for repair.'}
         action_id=uid()

@@ -515,6 +515,25 @@ class Kei(LegacyKei):
                 if not self.store.one("SELECT id FROM kei_social_actions WHERE channel=? AND message=? AND kind IN ('reply','short_reply') AND status IN ('pending','sending')", (str(channel.id), ids[-1])):
                     self.end_typing(str(channel.id), ids[-1])
             except Exception as exc:
+                # The public conversation schema already persists exact delivery
+                # provenance. Pending/uncertain replies must not be replayed, and
+                # only a real social_sent receipt counts as confirmed delivery.
+                reply = self.store.one(
+                    "SELECT a.id,a.status FROM kei_social_actions a "
+                    "JOIN kei_delivery_targets t ON t.action=a.id "
+                    "WHERE a.channel=? AND a.message IN (" + ','.join('?' for _ in ids) + ") "
+                    "AND t.scope=? AND t.actor=? AND a.kind IN ('reply','short_reply') "
+                    "AND (a.status IN ('pending','sending','uncertain') "
+                    "OR EXISTS (SELECT 1 FROM kei_social_sent s WHERE s.action=a.id)) "
+                    "ORDER BY a.at DESC LIMIT 1",
+                    (str(channel.id), *map(str, ids), key[0], str(batch['user'])),
+                )
+                if reply:
+                    LOG.warning('CONVERSATION_POSTPROCESSING_FAILED error=%s action=%s delivery=%s',
+                                type(exc).__name__, reply['id'], reply['status'])
+                    if reply['status'] not in ('pending', 'sending'):
+                        self.end_typing(str(channel.id), ids[-1])
+                    continue
                 LOG.warning('CONVERSATION_FAILED error=%s', type(exc).__name__)
                 self.end_typing(str(channel.id), ids[-1])
                 self.engine.conversation.queue(str(channel.id), ids[-1], 'reply', 'Kei bị lỗi xử lý lượt này rồi. Nhắn lại giúp em một lần nhé.', key[0], batch['user'])
@@ -607,16 +626,26 @@ class Kei(LegacyKei):
                     if task:
                         self.mark_exchange(row['channel'], task['actor'])
                     if task and (not row['channel'].startswith('mc:')):
-                        reference = await self.engine.conversation.reference(channel, task['message'])
-                    extra = {'reference': reference} if reference else {}
+                        reference = await self.engine.conversation.request_reference(channel, task['message'], task['actor'])
+                        if self.store.tombstoned([task['message']]):
+                            raise PermissionError('report_source_forgotten')
+                    if task:
+                        current = self.store.one('SELECT status FROM kei_tasks WHERE id=?', (task['task'],))
+                        gate = getattr(self.engine, 'service_authorize', None)
+                        permitted = bool(await gate(task['actor'], task['scope'], 'report')) if gate else True
+                        current = self.store.one('SELECT status FROM kei_tasks WHERE id=?', (task['task'],))
+                        if not permitted or not current or current['status'] == 'cancelled' or self.store.tombstoned([task['message']]):
+                            raise PermissionError('report_context_unavailable')
+                    prior_sent = self.store.one("SELECT b.id FROM kei_task_outbox m JOIN kei_outbox b ON b.id=m.outbox WHERE m.task=? AND b.status='sent' LIMIT 1", (task['task'],)) if task else None
+                    extra = {'reference': reference, 'mention_author': not bool(prior_sent)} if reference else {}
                     search = self.store.one("SELECT c.* FROM kei_search_cards c JOIN kei_task_outbox o ON c.request='task:'||o.task WHERE o.outbox=? AND c.finished=0 AND c.at>?", (row['id'], time.time() - 3600)) if not view else None
-                    edited = await self.engine.conversation.finish_search(channel, search, row['content']) if search else None
+                    edited = await self.engine.conversation.finish_search(channel, search, row['content']) if search and not reference else None
                     if edited:
                         sent = type('EditedSearch', (), {'id': edited})()
                     else:
                         sent = await channel.send(row['content'], allowed_mentions=discord.AllowedMentions.none(), view=view, **extra)
                     self.store.execute("UPDATE kei_outbox SET status='sent',message=? WHERE id=?", (str(sent.id), row['id']))
-                except (discord.Forbidden, discord.NotFound):
+                except (discord.Forbidden, discord.NotFound, PermissionError):
                     self.store.execute("UPDATE kei_outbox SET status='failed' WHERE id=?", (row['id'],))
                 except Exception as exc:
                     self.store.execute("UPDATE kei_outbox SET status='uncertain' WHERE id=?", (row['id'],))

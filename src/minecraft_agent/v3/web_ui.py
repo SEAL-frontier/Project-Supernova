@@ -9,13 +9,10 @@ from urllib.parse import urlsplit
 
 from . import VERSION
 
-AVATAR = Path(__file__).with_name("web_assets") / "kei.png"
 DEFAULT_BRANDING = {
     "name": "keys keys",
     "bot_name": "Kei",
     "deployment_label": "Self-hosted Minecraft copilot",
-    "tagline": "Her problem. Your server.",
-    "intro": 'A friend to chat with. A copilot to run Minecraft. One Kei who knows when to listen and when to get to work.',
     "repo_url": "https://github.com/TonyBucket/keys-keys",
     "community_url": "",
 }
@@ -31,8 +28,6 @@ def branding(values=None):
         ("name", 50),
         ("bot_name", 40),
         ("deployment_label", 80),
-        ("tagline", 120),
-        ("intro", 400),
     ):
         value = out[key]
         if (
@@ -101,7 +96,7 @@ def render_home(nonce, values=None, auth_ready=True):
             'href="#login-help" aria-disabled="true" data-login-link',
         )
         content = content.replace("__LOGIN_HELP_CLASS__", "notice notice-setup")
-        content = content.replace("__LOGIN_STATE__", 'Discord login is not ready')
+        content = content.replace("__LOGIN_STATE__", 'Setup required: configure Discord OAuth')
     else:
         content = content.replace("__LOGIN_HELP_CLASS__", "notice notice-setup hidden")
         content = content.replace("__LOGIN_STATE__", 'Log in with Discord')

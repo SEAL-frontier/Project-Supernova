@@ -15,7 +15,7 @@ import aiohttp
 from aiohttp import web
 
 from .config import Secrets
-from .web_ui import AVATAR, HTML, branding, render_home
+from .web_ui import branding, render_home
 
 LOG = logging.getLogger("kei.web")
 DISCORD = "https://discord.com/api/v10"
@@ -210,7 +210,6 @@ class Dashboard:
 
         app = web.Application(middlewares=[errors], client_max_size=65536)
         app.router.add_get("/", self.home)
-        app.router.add_get("/assets/kei.png", self.avatar)
         app.router.add_get("/login", self.login)
         app.router.add_get("/oauth/callback", self.callback)
         app.router.add_get("/api/session", self.session_hint)
@@ -224,7 +223,6 @@ class Dashboard:
         app.router.add_get("/api/memories", self.memories)
         app.router.add_get("/api/reports", self.reports)
         app.router.add_post("/api/access/preview", self.access_preview)
-        app.router.add_get("/assets/kei-spring.jpg", self.banner)
         app.router.add_post("/api/settings", self.settings)
         app.router.add_post("/api/link", self.link)
         app.router.add_post("/api/unlink", self.unlink)
@@ -452,16 +450,6 @@ class Dashboard:
             + "'; connect-src 'self'; img-src 'self' data: https://cdn.discordapp.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         )
         return response
-
-    async def avatar(self, request):
-        if not AVATAR.is_file():
-            raise web.HTTPNotFound(text="Avatar asset unavailable.")
-        return web.FileResponse(AVATAR)
-
-    async def banner(self, request):
-        path=AVATAR.with_name('kei-spring.jpg')
-        if not path.is_file():raise web.HTTPNotFound()
-        return web.FileResponse(path)
 
     async def session_hint(self,request):
         # Presentation only; no authority, tokens or CSRF. Every real operation
