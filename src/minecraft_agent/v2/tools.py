@@ -110,6 +110,13 @@ class ServerTools:
         return r.json() if r.content else {'accepted':True}
     def execute(self,name,args,mode='change',confirmed=False):
         known={x['function']['name'] for x in DEFINITIONS}
+        # Only this explicit extension may enter the common authorization gates.
+        # A random do_* attribute never registers a tool.
+        if name=='attachment_install':
+            supported=(callable(getattr(self,'do_attachment_install',None))
+                       and callable(getattr(self,'capabilities',None))
+                       and 'files' in self.capabilities())
+            if supported:known.add(name)
         if name not in known:raise ValueError('Unknown tool '+name)
         if name=='console' and re.match(r'^/?(?:\w+:)?(?:plugman|plugmanx)\s+(?:enable|disable|load|unload|reload)\b',args.get('command','').strip(),re.I):raise ValueError('Hot plugin lifecycle changes are unsupported: classloader state can be corrupted. Inspect the plugin-specific error, then use a clean authorized server restart; do not retry PlugMan enable/load/reload.')
         effect=effect_of(name,args)

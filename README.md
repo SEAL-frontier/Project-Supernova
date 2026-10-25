@@ -1,169 +1,137 @@
-<div align="center">
+# keys-keys (Project Supernova)
 
-<img src="assets/kei.png" alt="Tendou Kei, adjusting her glasses and judging this repository" width="160" height="160" />
+[![Release Candidate](https://img.shields.io/badge/release-v4.6.0--rc.2-orange)](https://github.com/SEAL-frontier/Project-Supernova/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-# keys-keys 🗝️🗝️
+> **Note**: `v4.6.0-rc.2` is a self-hosted pre-release candidate, not an officially finalized stable release. It does not claim behavioral parity with private or community-hosted deployments.
 
-**An open-source Adaptive Hybrid Minecraft Server Copilot**
+`keys-keys` is a self-hosted Discord companion and Minecraft server copilot built on the Supernova architecture. You run it on your own hardware using your own LLM API keys. It handles normal conversation, checks server health via Pterodactyl/Wings or SSH, safely surfaces command receipts, and keeps track of basic context without acting like an enterprise ticket bot.
 
-*Her server. Your problem.*
+[Vietnamese README (README.vi.md)](README.vi.md) | [Quickstart Guide](docs/QUICKSTART.md) | [Changelog](CHANGELOG.md)
 
-Actually, her problem. Your server. We got the custody arrangement wrong. 😭
+<p align="center">
+  <img src="assets/kei.png" alt="Tendou Kei fan tribute" width="280" />
+</p>
 
-![Version](https://img.shields.io/badge/version-4.0.0--rc.2-EFA5A5?style=flat-square)
-![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
-![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
-[![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
+*Character inspiration: Tendou Kei from Blue Archive. This is an independent open-source fan work under the MIT License; it is not affiliated with or endorsed by Nexon, Yostar, or the official Blue Archive project team.*
 
-[English](README.md) · [Tiếng Việt](README.vi.md) · [Setup](docs/QUICKSTART.md) · [Changelog](CHANGELOG.md)
+---
 
-</div>
+## Why this exists
 
-## What is this project?
+Running a Minecraft server usually starts with wanting to build stuff with friends and inevitably turns into SSHing from your phone, parsing crash logs, and answering "is the server down?" every forty minutes.
 
-**keys-keys is a self-hosted AI bot that lives in Discord and Minecraft.** People can
-chat with her in DMs, server channels or in-game. Assigned admins can also ask her to
-operate their Minecraft server: check TPS/RAM, investigate lag, read or change configs,
-manage plugins and run server commands. She uses real tools and checks the result.
+`keys-keys` unifies chat and server utilities into one process:
+- **Separation of roles**: Uses an everyday conversational model (`ag/gemini-3.8-flash-low` by default) for routine chat, while delegating command execution and server investigations to an agent model (`ag/gemini-3.8-flash-high` by default). Both endpoints are fully configurable.
+- **Operational boundaries**: Routine authorized changes execute directly, but dangerous operations require explicit requester confirmation. Host-level SSH access requires dedicated permissions; being friends with the bot never grants admin rights over your machine.
+- **Calculator receipts**: Restricted calculator evaluation that can render ordered formula PNGs directly to Discord for complex outputs. Native audio/video processing is not supported.
+- **Self-hosted dashboard**: Contains a minimal Discord OAuth shell for server operators to manage configuration.
 
-The Python bot runs the conversation, memory and agent. It connects through your Panel,
-SSH or the optional Minecraft plugin, using what you have available. One bot can serve
-multiple people and assigned servers. You bring a Discord token, a model endpoint and
-your own persona; start chat-only and add Minecraft when ready.
+## Recent Changes in v4.6.0-rc.2
 
-## Why does this project exist?
+- **Ephemeral worker source handoff**: Passes transient source references into fresh worker inferences bounded strictly to the same actor and same scope (within a six-hour window); durable handoff states store source IDs and hashes instead of raw transcripts, and workers checkpoint for session cancellation or forgotten sources.
+- **Direct message continuity boundaries**: DM continuity is strictly isolated per user; there is no automatic continuity across different scopes (including no public-to-DM transfer), and raw cross-scope transcripts are never exported.
+- **Progress live-output cleanup**: When a running task initiates a new command, only the previous live command output text is cleared to prevent channel clutter, while cards, receipts, and bounded final summaries remain intact.
+- **Actual completion summaries**: Saved task cards display bounded actual summaries rather than automatically assuming unchecked checklist steps are done.
+- **Anchored reply notification**: Task completion notifications explicitly target the original request in the same origin channel using Discord reference semantics (`parse=[]`, `replied_user=True`) on the first segment only, avoiding duplicate pings on subsequent segments.
 
-Because running a Minecraft server turns “let me play for a bit” into opening a panel,
-SSH, three logs, a config file and a plugin release page. Someone says “server lag”
-and suddenly you have a second job. Unpaid, naturally. 🥀
+---
 
-We wanted one character who could hang out with the group **and do that server work
-when asked**, in the same conversation. Casual chat should feel like chat. A server
-request should lead to an investigation, actions and a result backed by evidence.
+## Prerequisites
 
-That is why **Supernova** separates ordinary conversation from the copilot agent,
-and keeps memory, task progress and server access together. “Adaptive” means choosing
-the right kind of work; “hybrid” means using the connections available on that server.
-The open-source goal is to let other people run that setup with their own servers,
-models and characters. The original experiment happened to hand the job to Tendou Kei.
-She received a Minecraft server instead of a peaceful afternoon. 😭
+- Python `>= 3.11`
+- A Discord Bot application with **Message Content Intent** enabled
+- An OpenAI-compatible `/v1` endpoint supporting native function calling
+- Discord OAuth credentials (only if using the self-hosted operator dashboard)
 
-> **4.0.0-rc.2 is a release candidate.** Stable requires three things: natural social behavior
-> with durable memory, plugin/connectors verified on a real server, and a clean-clone
-> setup that does not require finding the developer. Evidence lives in
-> [the implementation log](IMPLEMENTATION.md) and [feature matrix](FEATURE_MATRIX.md).
+> Prompt templates, system personas, and `.env.example` placeholders are shipped empty by default. Usable system defaults are provided in the runtime configuration, and running interactive setup writes a local `data/persona.md` file using the user's provided persona choices rather than claiming an automatic persona identity.
 
-### Why the name keys-keys?
+---
 
-Her name is **Kei**. Someone kept calling her **keys** to annoy her. Now the typo owns
-a repository. Terrible naming process. Excellent commitment to the bit. 🥀
+## Quickstart
 
-The experimental character/avatar is **Tendou Kei**. Your persona is yours to write.
-This is a fan experiment, not an official Blue Archive product.
+```bash
+# 1. Clone repository
+git clone https://github.com/SEAL-frontier/Project-Supernova.git
+cd Project-Supernova
 
-[New in 4.0: conversations, relationships and guided server setup](docs/RELEASE_4.md)
+# 2. Virtual environment setup
+python -m venv .venv
+# Linux/macOS:
+source .venv/bin/activate
+# Windows PowerShell:
+# .venv\Scripts\Activate.ps1
 
-### Start here
+# 3. Install dependencies
+python -m pip install -e ".[dev]"
 
-Use **`/setup`** once and **`/settings`** later. Personal preferences, privacy,
-relationship profile, linked accounts and assigned servers live there.
-[Discord + optional Web UI](docs/SETTINGS.md) · [Local files without SSH](docs/LOCAL_ACCESS.md)
-· [Install the Minecraft plugin](docs/BRIDGE_INSTALL.md).
+# 4. Interactive configuration setup
+keys-keys setup --config data/config.yaml
 
-### What she does
+# 5. Add a target server (interactive prompt)
+keys-keys server add --kind panel --config data/config.yaml
 
-| Conversation | Minecraft copilot |
-|---|---|
-| Names, nicknames, group context and relationship history | Inspect TPS/MSPT, JVM memory, players, logs and plugins |
-| Reply, brief reply, reaction or silence | Plan → execute → verify → adjust |
-| Meaningful original episodes, not just a bag of facts | Persistent jobs, real evidence, compact live progress |
-| Opt-in social initiative with quiet hours | Config backup/readback, plugin staging/install and profiler analysis |
-| Discord/Minecraft continuity after verified linking | Scoped assignments, dangerous-step confirmation and recovery |
-| Images and source-linked web search | Use available Panel, Wings, SSH or bridge capabilities |
+# 6. Verify configuration without spending tokens
+keys-keys doctor --config data/config.yaml --offline
 
-**Supernova** is the architecture. The Aurora-inspired part is the social design from
-the feature checklist; this does not import or depend on an Aurora repository.
-
-```text
-Discord / Minecraft
-        ↓
-identity + context + relevant memories
-        ↓
-social decision ─── ordinary chat / reaction / silence
-        ↓ requested work only
-copilot ─── inspect → plan → act → verify
-        ↓
-available connectors + persistent receipts
+# 7. Start the bot
+keys-keys run --config data/config.yaml
 ```
 
-The operations worker is an agent loop. Ordinary conversation does not launch one.
-Relationship state changes how she speaks, never which server she is allowed to touch.
-No affection grinding your way into SSH access. Nice try.
+Running `keys-keys doctor` without the `--offline` flag makes a live health check to your configured model endpoint and will incur actual token costs.
 
-### Get her online
+### Running via Docker
 
-Create a Discord application/token, enable **Message Content Intent**, and get a
-provider key for an OpenAI-compatible endpoint with native tool calling.
+Docker Compose files are provided in the repository as templates:
 
-```sh
-git clone https://github.com/TonyBucket/keys-keys.git
-cd keys-keys
+```bash
 docker compose run --build --rm keys-keys setup
 docker compose run --rm keys-keys doctor
 docker compose up -d
 ```
+*Note: Docker Compose definitions have been checked for file structure only; container build and runtime operations have not been validated for this release candidate.*
 
-The wizard asks for language, timezone, token, provider and persona, then offers
-**chat-only**, Panel, SSH or plugin bridge. You can start with chat and add a server later.
-It discovers Panel servers and common SSH volumes instead of making you copy UUIDs
-from three tabs and pray.
+---
 
-For Vietnam, choose **Asia/Ho_Chi_Minh**. Provider default:
-`ag/gemini-3.8-flash-medium` through 9Router. Model ID is configurable; `doctor` checks
-an actual tool call instead of trusting a model name.
+## Discord Slash Commands
 
-If you leave owner ID blank, claim the bot using the private terminal code and `/setup`.
-The token, persona, config and memory are local under `data/`, which survives updates.
-Public prompt/persona/env/test files stay blank on purpose. The wizard fills **your
-local files**, not GitHub's placeholders.
+The public branch provides the following slash command groups:
 
-[Full quick start](docs/QUICKSTART.md) · [Connector choices](docs/CONNECTORS.md) ·
-[Install the plugin](docs/MINECRAFT.md) · [Upgrade from 2.x](docs/UPGRADING.md)
+- `/setup` - Guided private setup and optional initial bot ownership claim.
+- `/tasks` - Inspect your task history and progress.
+- `/settings` - Manage server-level preferences.
+- `/server connect`, `/server list`, `/server grant` - Connector bindings and access delegation.
+- `/social dm`, `/social timezone` - Optional proactive messaging and local timezone configuration.
+- `/privacy`, `/memory show`, `/memory forget` - Inspect and delete stored interaction history.
+- `/link`, `/unlink` - Account bridge bindings.
+- `/persona`, `/debug` - Bot operational inspect utilities.
 
-### Defaults that matter
+---
 
-- Ambient public participation is **off**. Admin can enable free or whitelisted channels.
-- The default trigger is `kei`; direct mentions/replies work too. Names are configurable.
-- Social DMs require opt-in, at most three/day, four hours apart, with quiet hours.
-- Raw conversation lasts 90 days; selected warm episodes keep useful original excerpts until forgotten.
-- `discreet` can carry a low-risk hint across contexts; it does not publish DMs or private stories.
-- Chat is open. Server work requires assignment. Ordinary authorized work runs; dangerous steps need confirmation.
-- A plugin cannot start its own stopped server. A staged JAR is not an enabled plugin.
+## Privacy & Default Rules
 
-### The commands you will actually use
+- **Passive listening**: Ambient participation defaults to off. When enabled, channel filtering modes are configurable.
+- **Proactive DMs are opt-in**: Proactive check-ins default to disabled. When enabled, baseline targets (defaulting to up to 3 messages per day and a minimum 4-hour interval) scale dynamically with context and relationship level. Quiet windows are configurable (defaulting to 22:00 to 08:00 in `Asia/Ho_Chi_Minh`).
+- **Retention**: Raw transcript logs expire after 90 days by default, while curated episodic memory is retained until explicitly cleared using `/memory forget`.
 
-| Command | Job |
-|---|---|
-| `/server connect`, `/server list`, `/server grant` | Connect a Panel privately and manage access |
-| `/link`, `/unlink` | Connect or separate Minecraft identity |
-| `/social dm`, `/social timezone` | Decide how much she appears in your life |
-| `/privacy`, `/memory show`, `/memory forget` | Inspect and control memory |
-| `/persona auto/soft/spicy` | Choose the old, stronger or adaptive style |
-| `/debug off/minimal/advanced` | Choose job progress detail |
-| `/kei <message>` in Minecraft | A private ingame conversation |
+---
 
-Examples: “Show the current anti-xray config”; “Find why TPS dropped, do not change anything”;
-“Stage this compatible plugin, leave restart for later”; “Remember why keys keys became a joke.”
+## Test Boundaries & Verification
 
-### Documentation
+### Public Release Limitations & Deferred Features
 
-[Setup](docs/QUICKSTART.md) · [Configuration](docs/CONFIGURATION.md) ·
-[Connections](docs/CONNECTORS.md) · [Minecraft](docs/MINECRAFT.md) ·
-[Social/memory/privacy](docs/SOCIAL.md) · [Updates/recovery](docs/UPGRADING.md) ·
-[Troubleshooting](docs/TROUBLESHOOTING.md)
+- **No automatic cross-scope continuity**: Bounded continuity is strictly restricted to the same actor and same scope; public-to-DM transfer and lexical cross-scope handoffs are not supported.
 
-## License and avatar
 
-Code: [MIT](LICENSE). Character/avatar: Tendou Kei, experimental fan use.
-The supplied art filename credits Manic-san; see [asset notes](assets/README.md).
-The code license does not relicense the character or artwork.
+Public verification runs against configured local test fixtures and mock responses, testing internal logic without requiring live Discord bots or external Minecraft servers:
+
+```bash
+python -m pytest tests -q --tb=short
+```
+
+External API errors (such as HTTP 400 responses from upstream model providers, sudden rate limits, or HTTP 200 responses returning unusable payloads) cannot be resolved automatically by local retry loops. Diagnostic utilities log sanitized error details without printing secret credentials.
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. Built by NeuralSeal & TonyBucket.

@@ -1,8 +1,28 @@
 # Changelog
 
-Current public version: **4.0.0-rc.2**. Architecture: **Supernova**.
+Current public candidate: **4.6.0-rc.2**. Architecture: **Supernova**.
 
-2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details and prompt/test contents are not published.
+2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details, persona/prompt contents and runtime test fixtures are not published. Public synthetic regression tests are included separately.
+
+## 4.6.0-rc.2 — Public continuity and receipt corrections
+
+- Carry bounded same-actor, same-scope recent dialogue into new worker inference using source IDs and content hashes; reconstruct quotations on demand, never duplicate them in persisted task history. Recheck forgetting, cancellation and optional service guards before worker requests and effects. No automatic cross-scope dialogue export or historical-task backfill.
+- Clear old log previews when a new progress command starts; show the saved final result without manufacturing unchecked plan-step completion.
+- Anchor task results to a validated same-channel requester message. Discord reply notification is enabled while user, role and everyone content mentions remain disabled. Client push notification delivery is not established.
+- Retain the dashboard-only public source and synthetic offline tests. Reminder revision binding, broader messenger routing and the private presence controller remain outside this compatible public slice.
+
+## Earlier unpushed 4.5.1-rc.1 candidate — Public candidate integration
+
+- Keep the public web surface dashboard-only with minimal Discord OAuth sign-in; no hero or introduction page.
+- Retain existing chat, scoped memory/privacy, relationships, scheduled tasks, connector configuration and public commands. The self-host operator supplies the persona and credentials; this remains an unofficial fan project.
+- Add sanitized provider diagnostics, permission-aware attachment dispatch fixes and post-reply processing protection. These are reliability changes, not proof that all provider failures are fixed.
+- Integrate restricted calculation and formula PNG support into the chat path. Offline integration tests use fake model and Discord boundaries and produce actual PNGs; this does not establish real-provider, live Discord or live Minecraft acceptance.
+- Include four synthetic public regression test files, separate from private runtime fixtures.
+- Update English documentation and add a Vietnamese README section composed through an actual Gemini 3.8 Flash Low request.
+
+Known limits: upstream HTTP 400 root cause remains unresolved; upstream blocking may produce no answer even with HTTP 200. Native video/audio understanding is unsupported.
+
+Validation boundary: public clean-checkout tests, build and integration acceptance must be reported from this public candidate separately. No private-hosted test totals or deployment results establish public acceptance; no completed full audit or live deployment is claimed here.
 
 ## 4.0.0-rc.2 — Talk like Kei, keep reports where they belong
 
@@ -12,8 +32,6 @@ Current public version: **4.0.0-rc.2**. Architecture: **Supernova**.
 - Revoke public partner disclosure when its supporting permission is forgotten, keeping unrelated relationship history intact.
 - Align the package import version with the runtime and distribution version; it previously retained a legacy version string.
 - Publish an explicit 35-checkpoint requirements audit with partial/missing acceptance boundaries. Do not count the remaining rich relationship, routine-learning, pairing and Hermes work as finished. Minecraft operation acceptance remains paused.
-
-Validation: 361 private checks and 69 selected checks against the stripped public source passed. Actual model replays distinguished ordinary check-ins from requested reports, and a formatting-only repair of the reported outline preserved command/link/quantity anchors. Snapshot/source integrity held; no test Discord messages or agent tasks were dispatched. These samples are not sustained social acceptance.
 
 ## 4.0.0-rc.1 — Follow the conversation, keep the story
 
@@ -26,8 +44,6 @@ Validation: 361 private checks and 69 selected checks against the stripped publi
 - Restore the sign-in state before loading the dashboard; avoid sequential network lookups just to show the access roster. Add guided SSH/SFTP, local folder and outbound Paper bridge setup alongside Pterodactyl/Pelican, connection lists and read-only tests. New SSH keys require an explicit fingerprint check.
 - Add task-owned attachment transfer with backup and byte verification, original-history recall with model-selected topic expansion, and verified procedure reuse. Uploaded data never grants execution permission. Preserve existing execution scopes, approval modes, scoped forgetting and loop guards.
 
-Validation before deployment: **338 private regressions**, **84 regressions against the stripped public export**, with an import-path check proving the public modules were tested; JavaScript syntax check; real deployment-host snapshot migration preserving 2,107 messages, 105 episodes and 134 memories; actual low-model counter/nickname replays; real Exa search reading two pages from one site; actual Panel status and SSH authentication plus UID-0/scoped folder read. Available Discord presence/member intents were checked from the application API. Browser testing used a disposable local fixture and covered session restoration, the connected-server list and the expanded SSH selector. These are not independent novice setup, sustained live social acceptance or new Minecraft write/action acceptance.
-
 This is a release candidate. Minecraft copilot end-to-end acceptance remains paused at the operator's request. Live social quality across days and a new person's complete OAuth/setup journey still need field acceptance; an isolated model replay or unit test is not that proof.
 
 ## 3.4.0-rc.3 — Check the right thing, stop the other loop paths
@@ -37,8 +53,6 @@ This is a release candidate. Minecraft copilot end-to-end acceptance remains pau
 - Distinct verified mutations establish progress once; cycling no-op mutations or cached receipts cannot repeatedly reset the read-loop guard. Config jobs treat ordinary heap/TPS jitter as the same server-state evidence. Explicit sampling and workflows that keep obtaining new evidence remain supported without an overall time or tool budget.
 - Stop checklist-only model loops after eight consecutive turns without execution. This is an execution-stagnation condition, not a deadline on useful work.
 - Fix a confirmed invalid reload certificate: running state/TPS cannot prove a plugin config reload, and an explicitly unaccepted console command cannot be certified by an unrelated health check. The verifier sees the actual task goal. Older invalid certificates no longer satisfy completion checks when a task is resumed; historical completed records are preserved.
-
-Validation: 318 private and 68 stripped-public regression checks; replay of 12 real task histories (468 recorded actions) still catches the original runaway at call 24 and now detects repeated running-state checks in the configuration job. Isolated validation on the deployment host checks real saved receipts and read-only connector output. No Minecraft restart or mutation was performed for this audit. Relationship policy and private persona are unchanged.
 
 ## 3.4.0-rc.2 — Stop investigating the same evidence forever
 
@@ -61,8 +75,6 @@ Validation: real 173-action incident replay warns at call 16 and identifies stag
 - Add configurable, durable one-turn social work holds for nonurgent directly assigned jobs. A natural please/do it/force resumes the original scoped job with permission revalidation. Emergencies, forced/repeated requests and scheduled workflows cannot be stalled this way. A thumbs-up acknowledgment can launch real work without a conversational paragraph.
 - Add global mood/bond/work-sulk controls and personal romance preferences. New relationship profiles explain uncalibrated defaults instead of displaying neutral priors as established judgments. Preserve original profiles, private persona, scoped excerpts and forgetting boundaries.
 
-Validation: 296 private and 70 stripped-public regression checks, local browser controls, isolated production-snapshot migration, actual OpenAI Decisions + existing chat model replay, and live deployment with authenticated owner refresh/session persistence; detailed evidence is recorded in FEATURE_MATRIX.md. This remains a prerelease: simulated cycles and API-backed replay do not establish sustained live social quality.
-
 ## 3.3.0-rc.1 — One person, one relationship
 
 - Unify numeric relationship state, frequency and durable rank across a linked person's DMs, guilds and Minecraft identity. Migrate existing profiles once without adding repeated channel baselines; keep contextual addressing, private excerpts and original evidence scoped. Forgotten contributions cannot reappear through a global aggregate.
@@ -73,8 +85,6 @@ Validation: 296 private and 70 stripped-public regression checks, local browser 
 - Learn model-identified nicknames from repeated retained messages of the actual speaker, across that person's permitted contexts. Nicknames never become universal triggers.
 - Accept raw-newline/fenced social JSON safely in the social parser, increase response/repair budgets, and log safe parser offsets. Operational tool arguments remain strict. Confirmed production failures were JSON parse errors; the rejected payloads were not retained, so the exact malformed bytes are unknown.
 - Let a later substantive exchange confirm an already-proposed stable rank using global history. Default confirmation is six hours; rank notices have a six-hour cooldown. Meaningful social events can update dimensions without inventing a new fact, with source dedupe and bounded credits. Minor/major notices retain the current-label arrow format.
-
-Validation: 284 private regressions and 58 checks against the stripped public source passed, including custom-provider setup round trips. Local owner UI save/pagination/collapse, actual low/high model probes, real read-only connector status, and isolated production-snapshot migration were checked. Production now runs this version with a fresh ready marker, database integrity OK, unchanged protected configuration/persona/secret hashes, no channel-specific rank rows and an existing web session retained through restart. A real-model replay of the reported counter/reconciliation exchange produced replies and a sourced relationship signal in an isolated snapshot; sustained conversation quality and natural rank progression still require real use. Interactive production-owner and mobile browser acceptance remain open. This is a prerelease.
 
 ## 3.2.0-rc.4 — Owner controls and a dashboard that stays signed in
 
@@ -188,7 +198,6 @@ Still a prerelease: long-term social behavior and independent fresh-user accepta
 ## 3.0.0-rc.2 — Forget means forget, even mid-consolidation
 
 - A user forgetting a source invalidates in-flight consolidation before it can write an old summary or group profile back into memory.
-- Adds a concurrent-forgetting regression; 121 private checks pass.
 - Backend-only patch. The compatible protocol-v1 bridge stays at 3.0.0-rc.1; no Minecraft restart is needed.
 - The clean-clone wizard/doctor flow and release gates from rc.1 remain applicable. Sustained social acceptance is still open.
 
@@ -206,7 +215,6 @@ Release candidate. Stable is gated on natural durable social behavior, live Mine
 - Adds setup/doctor/server/migrate CLI, private Discord controls, data-only Docker deployment and optional browser image.
 - Default Vietnam timezone is Asia/Ho_Chi_Minh; wizard/user preferences can change it.
 - Bounded memory batches resume backlog without losing same-time messages; offline Minecraft replies fall back to a linked DM.
-- Acceptance: 120 private regression checks, real-model memory replay, live Minecraft/Panel checks and automated interactive clean-clone setup. Sustained social acceptance remains open, so this is a prerelease.
 - Rewrites bilingual setup/docs; local personalization and credentials are generated under data/, while public placeholders remain blank.
 
 VI: Đây là nâng cấp cả social, memory, connector và Minecraft, không chỉ thêm mắm vào persona. Chưa đủ ba cửa nghiệm thu thì giữ rc.
@@ -217,7 +225,6 @@ VI: Đây là nâng cấp cả social, memory, connector và Minecraft, không c
 - Conversation snapshots exclude later queued messages and later assistant replies, preventing one batch from consuming another user's future input.
 - Images and the actual current text share the final user message, preserving the intent behind emoji-only and image turns.
 - Earlier assistant claims are not evidence of user words or UI actions. Preserve ordinary emoji reactions instead of inventing continuation requests.
-- 61 private regression checks, including delayed turns, interleaved speakers and multimodal message ordering.
 
 VI: Sửa lỗi Kei tự bảo người dùng bấm Continue khi họ chỉ gửi emoji. Tin thật luôn nằm cuối đúng vai user; tin đang chờ không bị lẫn qua lượt khác. Không đổi persona.
 
@@ -229,7 +236,6 @@ VI: Sửa lỗi Kei tự bảo người dùng bấm Continue khi họ chỉ gử
 - Discord image attachments and eligible replied images reach the model as native image inputs. JPEG/PNG/WebP, at most four images per turn, 8 MiB each / 16 MiB total; recent scoped context only, forgotten messages excluded. Provider rejection is explicit.
 - Added semantic automatic search to chat and native `web_search` to the copilot. Auto tries configured Exa/Firecrawl/SearxNG, free Exa MCP, then Bing RSS; results are cached for five minutes and include source URLs.
 - Verified the configured Gemini 3.8 Flash Medium endpoint actually read a Discord screenshot. Keyless search works on the deployed host; provider availability varies.
-- Private regression checks: 58 passing. Public prompt, persona, environment and test placeholders remain blank.
 
 VI: Lệnh đã chạy có log xác nhận thì báo đúng là xong. Thiếu hậu kiểm thì tự kiểm tra tiếp. Kei đọc được ảnh và tự tra web khi cần; chat bình thường vẫn đi đường chat.
 
@@ -248,7 +254,6 @@ VI: Lệnh đã chạy có log xác nhận thì báo đúng là xong. Thiếu h�
 
 - Light red embed for objective/status/checklist; advanced keeps all minimal content and adds commands/output in a codeblock.
 - Existing cards migrate by editing the same message. Long labels shorten cleanly; internal goal-update markers stay out of the visible objective.
-- Runtime/package/presence version synchronized. Private verification: 49 regression checks and a live Discord embed readback.
 
 ## 2.0.3 — 2026-10-15 — Keep the old voice, choose the new one
 

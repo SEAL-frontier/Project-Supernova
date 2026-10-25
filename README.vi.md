@@ -1,159 +1,137 @@
-<div align="center">
+# keys-keys (Project Supernova)
 
-<img src="assets/kei.png" alt="Tendou Kei chỉnh kính và phán xét cái repo này" width="160" height="160" />
+[![Release Candidate](https://img.shields.io/badge/bản_thử-v4.6.0--rc.2-orange)](https://github.com/SEAL-frontier/Project-Supernova/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-# keys-keys 🗝️🗝️
+> **Lưu ý**: Bản `v4.6.0-rc.2` là bản pre-release tự host (release candidate), chưa phải bản release đóng gói chính thức và không cam kết giống hệt 100% bản bot riêng đang chạy trong server nội bộ.
 
-**Bot AI tự host: vừa trò chuyện, vừa vận hành Minecraft server**
+`keys-keys` là con bot Discord kiêm phụ tá quản lý server Minecraft dựng trên kiến trúc Supernova. M tự chạy trên máy hoặc VPS của m, tự cắm API key LLM vào. Vừa để bạn bè trong server tám chuyện nhảm, vừa hỗ trợ soi log, check port, bấm lệnh Pterodactyl hay SSH mà không biến server Discord thành cái group thông báo cứng nhắc.
 
-*Her server. Your problem.*
+[English README](README.md) | [Hướng dẫn cài nhanh](docs/QUICKSTART.md) | [Nhật ký thay đổi](CHANGELOG.md)
 
-Thật ra là her problem, your server. Chia quyền nuôi server hơi lỗi. 😭
+<p align="center">
+  <img src="assets/kei.png" alt="Tendou Kei fan tribute" width="280" />
+</p>
 
-![Version](https://img.shields.io/badge/version-4.0.0--rc.2-EFA5A5?style=flat-square)
-![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
-[![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
+*Cảm hứng nhân vật: Tendou Kei (Blue Archive). Đây là dự án fan-made mã nguồn mở độc lập phát hành theo giấy phép MIT; không liên quan hay được bảo trợ bởi Nexon, Yostar hay đội ngũ phát triển Blue Archive.*
 
-[English](README.md) · [Tiếng Việt](README.vi.md) · [Cài đặt](docs/QUICKSTART.md) · [Changelog](CHANGELOG.md)
+---
 
-</div>
+## Làm ra con bot này làm gì?
 
-## Project này là gì?
+Vì vào Minecraft chơi tí rất dễ thành mở panel, SSH, lục ba cái log. Có người bảo server lag là m có thêm nghề, không lương.
 
-**keys-keys là bot AI tự host, vừa trò chuyện vừa làm copilot cho Minecraft server.**
-M có thể nói chuyện với ẻm trong DM Discord, channel hoặc ngay trong game. Người được
-assign còn có thể giao việc server bằng chat: xem TPS/RAM, tìm nguyên nhân lag, đọc/sửa
-config, quản lý plugin và chạy lệnh. Có tool thật, có kiểm tra kết quả.
+Thay vì ngồi trực máy liên tục, `keys-keys` gom việc quản lý và nói chuyện lại một chỗ:
+- **Tách rõ việc chat và việc chạy lệnh**: Chat thông thường dùng model nhẹ tiết kiệm tiền (`ag/gemini-3.8-flash-low`), khi nào cần bới log, chạy task phức tạp thì mới gọi model agent (`ag/gemini-3.8-flash-high`). Thích đổi sang model khác trong config lúc nào cũng được.
+- **Rõ ràng quyền hạn**: Các tác vụ thông thường đã cấp quyền sẽ tự chạy, nhưng thao tác nguy hiểm bắt buộc người yêu cầu phải bấm xác nhận. Thân với bot đến mấy thì vào server Discord cũng không tự có quyền SSH máy chủ.
+- **Kẹp tính toán an toàn**: Có bộ tính toán riêng, tự sinh ảnh công thức toán dạng PNG trả thẳng vào Discord chứ không đoán mò linh tinh. Bot không hỗ trợ xử lý file âm thanh hay video gốc.
+- **Dashboard tự host**: Có sẵn giao diện web tối giản đăng nhập qua Discord OAuth cho admin vào chỉnh đồ.
 
-Bot Python giữ phần hội thoại, memory và agent. Nó nối với Panel, SSH hoặc plugin
-Minecraft tùy thứ m có sẵn. Một bot phục vụ được nhiều người và nhiều server được
-phân quyền. M tự cấp Discord token, endpoint model và persona; muốn thử chat trước
-thì chưa cần nối server ngay.
+## Điểm mới trên bản v4.6.0-rc.2
 
-## Vì sao làm project này?
+- **Chuyển ngữ cảnh worker an toàn**: Chỉ nạp lại tham chiếu ngữ cảnh gần nhất của cùng một người dùng trong cùng phạm vi (tối đa 6 giờ) sang worker mới; dữ liệu lưu trữ chỉ giữ ID/mã băm chứ không copy transcript thô, tự dừng nếu dính lệnh forget hoặc huỷ tác vụ.
+- **Giới hạn mạch chat DM**: Mạch chat DM giữ riêng cho từng người dùng; không tự nối ngữ cảnh từ kênh chung sang DM và không xuất dữ liệu hội thoại thô giữa các phạm vi.
+- **Dọn dòng chạy tiến trình**: Khi thực hiện lệnh mới trong chuỗi task, bot chỉ xóa dòng text output tạm của lệnh trước đó; toàn bộ card, bill kết quả và tóm tắt cuối vẫn giữ nguyên.
+- **Tóm tắt kết quả chuẩn xác**: Card kết quả hiển thị đúng phần tóm tắt thực tế đã lưu, tuyệt đối không tự đánh dấu hoàn thành các bước chưa được kiểm tra.
+- **Phản hồi đúng gốc yêu cầu**: Báo kết quả task bám đúng tin nhắn gốc trong cùng kênh bằng cơ chế reply (`replied_user=True`, `parse=[]`) ở đoạn đầu tiên và không ping lặp lại ở các đoạn sau.
 
-Vì “vào Minecraft chơi tí” rất dễ biến thành mở panel, SSH, lục ba cái log, sửa config
-rồi đọc trang release plugin. Có người bảo “server lag” là m tự nhiên có thêm nghề.
-Không lương, nhưng được tag tên liên tục. 🥀
+---
 
-Bọn t muốn một nhân vật **vừa ngồi tám cùng nhóm, vừa xử lý việc server khi được nhờ**,
-ngay trong cuộc trò chuyện đó. Chat thường thì nói chuyện tự nhiên. Giao việc thì phải
-đi xem, làm và đưa kết quả có bằng chứng, thay vì hứa hỗ trợ rồi nằm im.
+## Chuẩn bị trước khi chạy
 
-Đó là lý do **Supernova** tách lượt chat khỏi agent làm việc, đồng thời giữ memory,
-tiến độ và quyền server cùng một chỗ. “Adaptive” là chọn cách xử lý hợp với yêu cầu;
-“hybrid” là tận dụng kết nối sẵn có của server. Mở source để người khác cũng tự host
-được với server, model và nhân vật của họ. Bản thử nghiệm ban đầu dùng Tendou Kei.
-Người ta cho ẻm một buổi chiều yên bình; bọn t cho ẻm một Minecraft server. 😭
+- Python `>= 3.11`
+- Một con Discord Bot đã bật **Message Content Intent** trong trang Developer Portal
+- Một endpoint API tương thích chuẩn `/v1` của OpenAI có hỗ trợ function calling
+- Discord OAuth (chỉ cần nếu m định bật dashboard web)
 
-> **4.0.0-rc.2 đang là release candidate.** Nghiệm thu gồm social tự nhiên và memory bền,
-> plugin/connector hoạt động trên server thật, và người mới cài được theo hướng dẫn.
-> Xem [biên bản triển khai](IMPLEMENTATION.md) và [bảng tính năng](FEATURE_MATRIX.md).
+> Các file mẫu `.env.example`, prompt hệ thống và persona mặc định được để trống. Cấu hình có sẵn các giá trị mặc định để chạy ngay, và lệnh setup sẽ tạo file `data/persona.md` cục bộ dựa trên nội dung bạn nhập chứ bot không tự nhận diện tính cách.
 
-### Sao lại tên keys-keys?
+---
 
-Tên ẻm là **Kei**. Bọn t cứ gọi thành **keys** để ragebait, xong đem luôn tên sai lên
-GitHub. Thiếu tỉnh táo nhưng rất nhất quán. 🥀 Character/avatar thử nghiệm là **Tendou Kei**;
-persona của bản tự host do m viết. Đây là fan project; quyền nhân vật và ảnh thuộc chủ sở hữu.
+## Cách cài đặt
 
-[Bản 4.0: hội thoại, quan hệ và thêm server dễ hơn](docs/RELEASE_4.md)
+```bash
+# 1. Kéo mã nguồn về máy
+git clone https://github.com/SEAL-frontier/Project-Supernova.git
+cd Project-Supernova
 
-### Bắt đầu ở đây
+# 2. Tạo môi trường ảo venv
+python -m venv .venv
+# Trên Linux/macOS:
+source .venv/bin/activate
+# Trên Windows PowerShell:
+# .venv\Scripts\Activate.ps1
 
-**`/setup`** để bắt đầu, **`/settings`** để chỉnh lại. Tính cách, privacy, memory,
-profile quan hệ, link tài khoản và server được assign nằm ở đó.
-[Discord + Web UI tùy chọn](docs/SETTINGS.md) · [File local không cần SSH](docs/LOCAL_ACCESS.md)
-· [Cài plugin Minecraft](docs/BRIDGE_INSTALL.md).
+# 3. Cài đặt các gói phụ thuộc
+python -m pip install -e ".[dev]"
 
-### Nó làm được gì?
+# 4. Chạy trình thiết lập ban đầu
+keys-keys setup --config data/config.yaml
 
-| Trò chuyện | Minecraft copilot |
-|---|---|
-| Nhận đúng người qua ID, display name và nickname | Đọc TPS/MSPT, RAM Java, player, log và plugin |
-| Chọn trả lời, nói ngắn, react hoặc im | Xem → lên kế hoạch → làm → kiểm chứng → điều chỉnh |
-| Memory theo người/nhóm, kỷ niệm giữ đoạn gốc | Task bền vững, bằng chứng, tiến độ gọn |
-| Chủ động nhắn khi opt-in, có giờ yên lặng | Backup/readback config, stage/cài plugin, phân tích profiler |
-| Nối Discord/Minecraft sau khi xác thực | Assign đúng người/server, xác nhận bước nguy hiểm |
-| Đọc ảnh và tìm nguồn trên web | Dùng Panel, Wings, SSH hoặc plugin bridge sẵn có |
+# 5. Thêm server quản lý (nhập thông tin trực tiếp)
+keys-keys server add --kind panel --config data/config.yaml
 
-**Supernova** là tên kiến trúc. Phần social lấy cảm hứng từ checklist Aurora đã chốt;
-repo không import hay phụ thuộc một codebase Aurora khác.
+# 6. Kiểm tra cấu hình không tốn tiền API
+keys-keys doctor --config data/config.yaml --offline
 
-Chat thường đi đường nhẹ, nhờ việc mới mở worker. Mức thân thiết hướng dẫn cách nói;
-quyền thao tác vẫn theo assignment. Spam “keys keys” 67 lần không mở khóa SSH đâu 🦭
+# 7. Khởi động bot
+keys-keys run --config data/config.yaml
+```
 
-### Cài đỡ khổ
+Nếu gõ `keys-keys doctor` mà không có cờ `--offline`, bot sẽ gọi thử một lượt test kết nối tới endpoint LLM và sẽ tốn token thật của m.
 
-Cần Docker Compose, Discord bot token và endpoint model tương thích OpenAI có native
-tool calling. Tạo bot ở [Discord Developer Portal](https://discord.com/developers/applications),
-bật **Message Content Intent**, invite với `bot` + `applications.commands`, rồi cấp quyền
-xem/gửi tin, đọc lịch sử, embed và reaction trong channel m chọn.
+### Chạy qua Docker
 
-```sh
-git clone https://github.com/TonyBucket/keys-keys.git
-cd keys-keys
+File Compose đã để sẵn trong repo:
+
+```bash
 docker compose run --build --rm keys-keys setup
 docker compose run --rm keys-keys doctor
 docker compose up -d
 ```
+*Lưu ý: File Docker Compose chỉ mới được kiểm tra cấu trúc file; việc build và chạy container thực tế chưa được kiểm thử toàn diện trên bản thử nghiệm này.*
 
-Wizard hỏi ngôn ngữ, timezone, token, provider và persona, rồi cho chọn `chat`, Panel,
-SSH hoặc plugin bridge. Chưa có server thì chọn `chat`; muốn thêm sau vẫn được. Panel
-có danh sách để chọn, SSH có dò thư mục phổ biến; không bắt đi săn UUID qua ba tab.
+---
 
-Việt Nam dùng **Asia/Ho_Chi_Minh**, wizard cho đổi. Model mặc định là
-`ag/gemini-3.8-flash-medium` qua 9Router; có thể chọn model khác và kiểm bằng `doctor`.
-URL provider phải truy cập được từ container. Localhost trong container là chính nó,
-đừng bắt Kei tìm 9Router trong phòng mình rồi đổ tại em nó.
+## Các lệnh Discord Slash
 
-Chưa biết Discord user ID thì để trống owner, lấy mã riêng trong terminal rồi `/setup`
-để claim. Token, config, persona và memory nằm riêng trong `data/`, giữ qua lần cập nhật.
-Các file prompt/persona/env/test public vẫn trống; wizard tạo **file local của m**.
+Bản public đang có sẵn các cụm lệnh sau:
 
-[Hướng dẫn từng bước](docs/QUICKSTART.md) · [Chọn connector](docs/CONNECTORS.md) ·
-[Cài plugin](docs/MINECRAFT.md) · [Nâng từ 2.x](docs/UPGRADING.md)
+- `/setup` - Thiết lập bot lần đầu.
+- `/tasks`
+- `/settings` - Chỉnh cấu hình bot trong server.
+- `/server connect`, `/server list`, `/server grant` - Quản lý kết nối server Minecraft và phân quyền.
+- `/social dm`, `/social timezone` - Bật/tắt nhắn tin chủ động và chỉnh múi giờ.
+- `/privacy`, `/memory show`, `/memory forget` - Xem và yêu cầu bot xoá dữ liệu nhớ tạm của bản thân.
+- `/link`, `/unlink` - Liên kết tài khoản người chơi.
+- `/persona`, `/debug` - Xem thông tin chẩn đoán kỹ thuật.
 
-### Mặc định đáng biết
+---
 
-- Tự xen vào public tắt mặc định; admin bật `free` hoặc whitelist channel.
-- Trigger mặc định `kei`, có thể đổi. Mention/reply trực tiếp vẫn dùng được.
-- DM chủ động cần opt-in, tối đa ba lần/ngày, cách nhau bốn giờ, có giờ yên lặng.
-- Chat thô giữ 90 ngày; episode quan trọng giữ trích đoạn hữu ích tới khi quên.
-- `discreet` cho gợi nhắc ít nhạy cảm giữa các ngữ cảnh; không quote DM ra public.
-- Người thường chat được. Copilot cần assign đúng server; bước nguy hiểm cần xác nhận.
-- Plugin không tự bật lại server đã tắt. Stage JAR xong vẫn cần kiểm plugin thực sự được bật.
+## Quyền riêng tư & Cấu hình mặc định
 
-### Mấy lệnh dùng hằng ngày
+- **Tự nghe ngóng (Ambient)**: Mặc định tắt. Khi bật, chế độ lọc kênh có thể tùy chỉnh.
+- **Chủ động nhắn tin riêng (Proactive DM)**: Mặc định tắt, người dùng phải tự bật. Khi kích hoạt, mốc cơ bản (mặc định tối đa 3 tin/ngày và cách nhau ít nhất 4 tiếng) sẽ tự điều chỉnh theo mức độ thân thiết và ngữ cảnh. Khung giờ yên tĩnh có thể tự cấu hình (mặc định 22:00 đến 08:00 theo múi giờ `Asia/Ho_Chi_Minh`).
+- **Thời gian lưu log**: Dữ liệu chat thô hết hạn sau 90 ngày theo mặc định, còn ký ức ngữ cảnh chọn lọc được lưu lại cho đến khi m dùng `/memory forget`.
 
-| Lệnh | Làm gì |
-|---|---|
-| `/server connect`, `/server list`, `/server grant` | Nối Panel riêng tư, xem server, cấp quyền |
-| `/link`, `/unlink` | Nối hoặc gỡ danh tính Minecraft |
-| `/social dm`, `/social timezone` | Chỉnh mức chủ động và timezone |
-| `/privacy`, `/memory show`, `/memory forget` | Xem và quản lý memory |
-| `/persona auto/soft/spicy` | Chọn giọng cũ, đậm vị hoặc linh hoạt |
-| `/debug off/minimal/advanced` | Chỉnh độ chi tiết tiến độ |
-| `/kei <tin nhắn>` trong game | Nói chuyện riêng với Kei |
+---
 
-Ví dụ: “Check TPS với RAM Java server này”; “Đọc anti-xray hiện tại”; “Tìm nguyên nhân
-lag, chưa sửa gì”; “Stage plugin tương thích rồi báo lại”; “Nhớ vì sao keys keys thành trò đùa”.
+## Giới hạn và Kiểm thử
 
-`minimal` hiện objective/checklist trong embed hồng nhạt; `advanced` thêm codeblock
-lệnh/log thật. Card được edit gọn. Persona cũ có thể giữ ở `soft`; giao việc không cần dỗ.
+### Giới hạn bản Public & Tính năng tạm hoãn
 
-### Tài liệu và giới hạn
+- **Không tự nối mạch khác phạm vi**: Ngữ cảnh chỉ hoạt động trong cùng người dùng và cùng phạm vi; chưa hỗ trợ chuyển ngữ cảnh từ kênh chung sang DM hay trích xuất từ vựng chéo kênh.
 
-[Cài đặt](docs/QUICKSTART.md) · [Cấu hình](docs/CONFIGURATION.md) ·
-[Kết nối](docs/CONNECTORS.md) · [Minecraft](docs/MINECRAFT.md) ·
-[Social/memory/privacy](docs/SOCIAL.md) · [Cập nhật/khôi phục](docs/UPGRADING.md) ·
-[Gỡ lỗi](docs/TROUBLESHOOTING.md) · [Changelog](CHANGELOG.md)
 
-Mỗi connector có giới hạn. Plugin-only không bật lại server đã tắt; đăng nhập Panel có
-thể cần browser tùy chọn hoặc session đã xác thực. Không hot reload plugin. Một bot token,
-một consumer; đừng để hai chị em cùng trả lời một tin rồi hỏi sao nó lắm mồm.
+Kiểm thử public chạy bằng mock dữ liệu cục bộ và xuất file ảnh tính toán nội bộ, không phụ thuộc vào Discord thật hay server Minecraft thật:
 
-### License và avatar
+```bash
+python -m pytest tests -q --tb=short
+```
 
-Code: [MIT](LICENSE). Character/avatar: Tendou Kei, dùng cho fan experiment.
-Tên file ảnh được cung cấp ghi credit Manic-san; xem [ghi chú asset](assets/README.md).
-MIT áp dụng cho code; quyền nhân vật và artwork vẫn thuộc chủ sở hữu tương ứng.
+Các sự cố từ nhà cung cấp LLM (như lỗi HTTP 400, nghẽn quota, hoặc trả về mã HTTP 200 nhưng payload không hợp lệ) không thể tự khắc phục qua vòng retry nội bộ của bot. Trình chẩn đoán sẽ ghi nhận log an toàn mà không in lộ secret token.
+
+---
+
+## Bản quyền
+
+Dự án phát hành theo Giấy phép MIT - xem chi tiết tại file [LICENSE](LICENSE). Phát triển bởi NeuralSeal & TonyBucket.

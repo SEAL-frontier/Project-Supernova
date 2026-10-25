@@ -10,6 +10,13 @@ prompts/*.md
 # Empty prompt placeholders are tracked; filled local versions use skip-worktree.
 tests/*
 !tests/.gitkeep
+!tests/test_public_fixes.py
+!tests/test_dashboard_public.py
+!tests/test_public_math_chat.py
+!tests/test_public_postreply.py
+!tests/test_public_continuity.py
+!tests/test_public_progress.py
+!tests/test_public_report_reply.py
 .venv/
 venv/
 __pycache__/
