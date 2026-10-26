@@ -10,7 +10,7 @@
 
 Actually, her problem. Your server. We got the custody arrangement wrong. 😭
 
-![Version](https://img.shields.io/badge/version-4.6.0--rc.3-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-4.6.0-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
@@ -49,9 +49,9 @@ the connections the server actually has. The point of opening the source is that
 can run it with your own servers, models and character. We gave Tendou Kei a Minecraft
 server instead of a peaceful afternoon. This may explain a few things.
 
-> **This is a release candidate, not a stable release.** Self-hosted behavior depends on
-> your model, connector permissions and configuration. This repository is not a copy of
-> a private hosted bot's deployment or community rules. Version-by-version changes belong
+> **4.6.0 is the stable public release.** Self-hosted behavior still depends on your
+> model, connector permissions and configuration. This repository is not a copy of a
+> private hosted bot's deployment or community rules. Version-specific changes belong
 > in the [changelog](CHANGELOG.md), not in the middle of your setup instructions.
 
 ### Why the name keys-keys?

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "keys-keys"
-version = "4.6.0-rc.3"
+version = "4.6.0"
 description = "An open-source Adaptive Hybrid Minecraft Server Copilot"
 readme = "README.md"
 requires-python = ">=3.11"

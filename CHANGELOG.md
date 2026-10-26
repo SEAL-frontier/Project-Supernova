@@ -1,8 +1,14 @@
 # Changelog
 
-Current public candidate: **4.6.0-rc.3**. Architecture: **Supernova**.
+Current public release: **4.6.0**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details, persona/prompt contents and runtime test fixtures are not published. Public synthetic regression tests are included separately.
+
+## 4.6.0 — Stable public release
+
+- Promote the public rc.3 feature set to the stable 4.6.0 release; align package/import versions, README badges and the Compose image example. No new runtime behavior, schema or permission changes.
+- Retain the source-bound messenger, compact `/settings` and `/server` menus, and restored English/Vietnamese project guides described below.
+- This promotion does not claim new live Discord-client, Minecraft, Docker or long-term social acceptance, nor a universal fix for upstream provider failures. Existing self-hosting, privacy and connector boundaries still apply.
 
 ## 4.6.0-rc.3 — Human handoffs and smaller menus
 
