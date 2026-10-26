@@ -32,3 +32,5 @@ Thumbs.db
 bridge/target/
 private-checks/
 compose.override.yaml
+
+!tests/test_public_interaction73.py

@@ -53,7 +53,7 @@ class Telemetry:
         if not self.enabled:
             return None
         allowed = {
-            "conversation": {"intent", "action", "reason", "received_at", "queue_ms", "route_calls", "parse_repairs", "context_chars", "model_ms", "style_ms"},
+            "conversation": {"intent", "action", "reason", "received_at", "queue_ms", "route_calls", "parse_repairs", "context_chars", "model_ms", "style_ms", "decision_calls", "decision_ms", "repeat_skips"},
             "social_state": {"stage", "validation"},
             "bridge_sample": set(),
         }
@@ -70,7 +70,7 @@ class Telemetry:
             if key in enums and (not isinstance(value, str) or value not in enums[key]):
                 raise ValueError("Invalid telemetry tag")
             if key not in enums and (
-                not isinstance(value, (int, float)) or not math.isfinite(value)
+                type(value) not in (int, float) or not math.isfinite(value)
             ):
                 raise ValueError("Telemetry measurements must be finite numbers")
         if outcome not in ("ok", "error", "up", "down"):

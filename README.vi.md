@@ -10,7 +10,7 @@
 
 Thực ra là her problem, your server. Bọn t chia quyền nuôi server hơi lỗi. 😭
 
-![Version](https://img.shields.io/badge/version-4.6.0-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-4.6.1-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
@@ -49,7 +49,7 @@ nối server đang thực có. Mở mã nguồn là để m tự vác về chạ
 của riêng m. Bọn t lỡ đưa cho Tendou Kei một cái Minecraft server thay vì một buổi chiều
 yên bình. Chắc điều này giải thích được vài thứ. 😭
 
-> **Bản 4.6.0 là bản phát hành chính thức (stable public release), không phải candidate.** Tự host chạy thế nào còn tùy vào model, quyền connector và cấu hình của m. Repo này không copy nguyên xi bản host nội bộ hay quy định cộng đồng riêng của ai cả. Chi tiết thay đổi xem ở [CHANGELOG](CHANGELOG.md).
+> **Bản 4.6.1 là bản phát hành chính thức (stable public release), không phải candidate.** Tự host chạy thế nào còn tùy vào model, quyền connector và cấu hình của m. Repo này không copy nguyên xi bản host nội bộ hay quy định cộng đồng riêng của ai cả. Chi tiết thay đổi xem ở [CHANGELOG](CHANGELOG.md).
 
 ### Sao lại tên keys-keys?
 

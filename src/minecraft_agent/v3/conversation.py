@@ -24,6 +24,7 @@ def message_record(message):
         "bot": bool(author.bot),
         "webhook": bool(getattr(message, "webhook_id", None)),
         "content": str(message.content)[:3000],
+        "content_truncated": len(str(message.content)) > 3000,
         "at": message.created_at.timestamp(),
         "reply_to": str(ref.message_id) if ref else None,
         "mentions": [str(u.id) for u in getattr(message, "mentions", [])],
@@ -97,17 +98,59 @@ class Conversation:
             (task, scope, str(actor), str(channel), str(message), ack),
         )
 
+    def _capture_record(self, message, scope):
+        """Bind Discord's raw view to the public ingress's canonical stored text."""
+        row = message_record(message)
+        source = self.db.one('SELECT * FROM kei_messages WHERE id=? AND scope=?', (row['id'], scope))
+        if source and source['user'] == row['author_id'] and not source['forgotten'] and source['role'] == 'user':
+            import re
+            own = getattr(getattr(message.channel, '_state', None), 'user', None)
+            raw = str(message.content)
+            if own is not None:
+                raw = re.sub(r'<@!?' + re.escape(str(own.id)) + '>', '', raw)
+            raw = raw.strip()
+            visible = source['content'].split('\n[REPLIED MESSAGE', 1)[0].split('\n[ATTACHMENT ', 1)[0].split('\nAttachments:', 1)[0].strip()
+            if visible == raw:
+                row['content'] = source['content']
+                row['content_truncated'] = False
+        return row
+
     async def capture(self, channel, scope, actor, ids):
-        if not scope.startswith("guild:") or not ids:
+        revision = getattr(self, '_interaction_revision', 0)
+        forgotten_before = self.db.one("SELECT value FROM kei_meta WHERE key='memory-forget-generation'")
+        session_before = self.db.conversation_session_after(scope)
+        if not ids:
             return
         limit = max(1, min(30, int(self.cfg.get("social", {}).get("context_messages", 10))))
+        if scope == 'dm:' + str(actor):
+            # Existing gateway cache only; never fetch DM history or another DM.
+            cached = getattr(getattr(channel, '_state', None), '_messages', ()) or ()
+            messages = [self._capture_record(m, scope) for m in list(cached)[-1000:]
+                        if str(m.channel.id) == str(channel.id)][-limit:]
+            if not messages:
+                return
+            if (revision != getattr(self, '_interaction_revision', 0)
+                    or forgotten_before != self.db.one("SELECT value FROM kei_meta WHERE key='memory-forget-generation'")
+                    or session_before != self.db.conversation_session_after(scope)):
+                return
+            payload = {'status': 'ok', 'channel': str(channel.id), 'request_ids': list(map(str, ids)),
+                       'messages': messages, 'forget_generation': forgotten_before,
+                       'session_after': session_before, 'capture_kind': 'gateway_cache'}
+            self.db.execute('INSERT OR REPLACE INTO kei_nearby VALUES (?,?,?,?,?,?)',
+                            (str(ids[-1]), scope, str(actor), str(channel.id), dumps(payload), time.time()))
+            self.db.execute('DELETE FROM kei_nearby WHERE at<?', (time.time() - 3600,))
+            return
+        if not scope.startswith('guild:'):
+            return
+        if len(scope.split(':')) != 3 or scope.split(':')[2] != str(channel.id):
+            return
         records = {}
         status = "ok"
         try:
             async for message in channel.history(
                 limit=limit, around=discord.Object(id=int(ids[-1]))
             ):
-                records[str(message.id)] = message_record(message)
+                records[str(message.id)] = self._capture_record(message, scope)
             # Reply chains can point beyond the immediate ten-message window; bounded depth.
             pending = list(ids)
             for _ in range(3):
@@ -116,7 +159,7 @@ class Conversation:
                     row = records.get(str(ident))
                     if not row:
                         try:
-                            row = message_record(await channel.fetch_message(int(ident)))
+                            row = self._capture_record(await channel.fetch_message(int(ident)), scope)
                             records[str(ident)] = row
                         except (discord.NotFound, discord.Forbidden):
                             continue
@@ -125,7 +168,7 @@ class Conversation:
                         try:
                             ref = await channel.fetch_message(int(target))
                             if str(ref.channel.id) == str(channel.id):
-                                records[target] = message_record(ref)
+                                records[target] = self._capture_record(ref, scope)
                         except (discord.NotFound, discord.Forbidden):
                             pass
                     if target and target in records:
@@ -135,8 +178,14 @@ class Conversation:
                     break
         except discord.HTTPException as exc:
             status = type(exc).__name__
+        if (revision != getattr(self, '_interaction_revision', 0)
+                or forgotten_before != self.db.one("SELECT value FROM kei_meta WHERE key='memory-forget-generation'")
+                or session_before != self.db.conversation_session_after(scope)):
+            return
         payload = {
             "status": status,
+            "forget_generation": forgotten_before,
+            "session_after": session_before,
             "channel": str(channel.id),
             "guild": scope.split(":")[1],
             "request_ids": list(map(str, ids)),
@@ -149,18 +198,52 @@ class Conversation:
         self.db.execute("DELETE FROM kei_nearby WHERE at<?", (time.time() - 3600,))
 
     def context(self, scope, request):
+        from .interaction_context import project_context
         row = self.db.one(
-            "SELECT data FROM kei_nearby WHERE request=? AND scope=? AND at>?",
+            "SELECT data,actor FROM kei_nearby WHERE request=? AND scope=? AND at>?",
             (str(request), scope, time.time() - 3600),
         )
-        data = json.loads(row["data"]) if row else {"messages": []}
-        if not row and scope.startswith('dm:'):
-            cutoff=self.db.one('SELECT at FROM kei_messages WHERE id=? AND scope=?',(str(request),scope))
-            if cutoff:
-                data['messages']=list(reversed(self.db.rows("SELECT id,user,role,content,at FROM kei_messages WHERE scope=? AND forgotten=0 AND at<=? AND (role='assistant' OR user=?) ORDER BY at DESC LIMIT 10",(scope,cutoff['at'],scope.split(':',1)[1]))))
-        forgotten = {r["source"] for r in self.db.rows("SELECT source FROM kei_forget_tombstones")}
-        data["messages"] = [m for m in data["messages"] if m["id"] not in forgotten]
-        return data
+        try:
+            data = json.loads(row['data']) if row else None
+        except (ValueError, TypeError):
+            data = None
+        return project_context(self.db, self.cfg, scope, request, data,
+                               snapshot_actor=row['actor'] if row else None,
+                               revoked=getattr(self, '_interaction_revoked', ()))
+
+    def interaction_observation(self, scope, request, actor, *, protected=False, awaited_answer=False):
+        from .interaction_context import observe
+        return observe(self, scope, request, actor, protected=protected, awaited_answer=awaited_answer)
+
+    def accept_interaction(self, observation):
+        from .interaction_context import accept
+        return accept(self, observation)
+
+    def interaction_token(self, scope, request):
+        from .interaction_context import context_token
+        return context_token(self, scope, request)
+
+    def interaction_valid(self, token):
+        from .interaction_context import context_valid
+        return context_valid(self, token)
+
+    def invalidate_interactions(self, source=None):
+        # Gateway edit/delete revokes in-flight snapshots and transient accepts.
+        self._interaction_revision = getattr(self, '_interaction_revision', 0) + 1
+        self._interaction_accepted = {}
+        if source is not None:
+            source = str(source)
+            # IDs only; edited/deleted evidence stays unavailable, including
+            # across restart. Never reuse stale retained prose as a replacement.
+            self.db.execute('INSERT OR REPLACE INTO kei_meta VALUES (?,?)',
+                            ('interaction-revoked:' + source, str(time.time())))
+            for row in self.db.rows('SELECT request,data FROM kei_nearby'):
+                try:
+                    data = json.loads(row['data'])
+                except (ValueError, TypeError):
+                    data = {}
+                if row['request'] == source or any(str(m.get('id')) == source for m in data.get('messages', [])):
+                    self.db.execute('DELETE FROM kei_nearby WHERE request=?', (row['request'],))
 
     def queue(self, channel, request, kind, content, scope, actor, mode="reply", target=None):
         if kind == "silence":
