@@ -1,9 +1,8 @@
 from __future__ import annotations
-import asyncio, hashlib, json, logging, re, time, uuid, os, copy
+import asyncio, json, logging, re, time, uuid, os, copy
 from pathlib import Path
 from contextlib import asynccontextmanager
 import discord
-from discord import app_commands
 from ..v2.application import Kei as LegacyKei
 from ..v2.identity import sync_identity
 from ..v2.progress import Reporter
@@ -11,12 +10,14 @@ from ..v2.store import dumps, uid
 from . import VERSION
 from .engine import Engine
 from .bridge import Bridge
-from .config import Secrets, normalize_profile, save_config
+from .config import Secrets
 from .social import nickname, ambient_allowed, low_signal, followup_allowed, participation_candidate
 from .panel import Panel
 from .ux import UserExperience
 from .social_policy import asks_quiet, operation
 LOG = logging.getLogger('kei')
+PUBLISHED_COMMANDS = frozenset({'settings', 'server'})
+RETIRED_COMMANDS = frozenset({'debug', 'persona', 'social', 'privacy', 'link', 'unlink', 'memory', 'setup', 'tasks', 'feedback', 'telemetry'})
 
 class MinecraftMessage:
 
@@ -107,6 +108,7 @@ class Kei(LegacyKei):
         super().__init__(cfg, store, model)
         self.bridge = Bridge(store, cfg, Secrets(cfg.get('secrets_file', 'data/secrets.json')))
         self.engine = Engine(cfg, store, model, self.bridge)
+        self.engine.messenger_resolve = self.resolve_messenger_recipient
         self.engine.search_observer = self.search_status
         self.ux = UserExperience(self)
         self.bridge.handler = self.minecraft_event
@@ -246,114 +248,10 @@ class Kei(LegacyKei):
             LOG.warning('Search status deferred (%s)', type(exc).__name__)
 
     def _register_commands(self):
-        social = app_commands.Group(name='social', description='Cách Kei tương tác với bạn và channel')
-
-        @social.command(name='dm', description='Bật/tắt Kei chủ động nhắn riêng; tối đa 3 lần/ngày, có giờ yên lặng')
-        @app_commands.choices(mode=[app_commands.Choice(name='on', value='on'), app_commands.Choice(name='off', value='off')])
-        async def social_dm(interaction: discord.Interaction, mode: app_commands.Choice[str]):
-            person = self.engine.identity.resolve('discord', interaction.user.id)
-            self.engine.memory.set_preference(person, dm_opt_in=mode.value == 'on')
-            await interaction.response.send_message('DM chủ động: **' + mode.value + '**. Không trả lời thì Kei sẽ không gửi đuổi.', ephemeral=True)
-
-        @social.command(name='timezone', description='Đặt timezone IANA của bạn cho giờ yên lặng')
-        async def timezone_command(interaction: discord.Interaction, timezone: str):
-            try:
-                self.engine.memory.set_preference(self.engine.identity.resolve('discord', interaction.user.id), timezone=timezone)
-                text = 'Đã lưu timezone ' + timezone + '.'
-            except Exception:
-                text = 'Timezone không hợp lệ. Ví dụ: Asia/Ho_Chi_Minh.'
-            await interaction.response.send_message(text, ephemeral=True)
-        self.tree.add_command(social)
-
-        @app_commands.command(name='privacy', description='Chọn strict hoặc cho Kei gợi nhắc kín đáo giữa các ngữ cảnh')
-        @app_commands.choices(mode=[app_commands.Choice(name=x, value=x) for x in ('strict', 'discreet')])
-        async def privacy_command(interaction: discord.Interaction, mode: app_commands.Choice[str]):
-            self.engine.memory.set_preference(self.engine.identity.resolve('discord', interaction.user.id), sharing=mode.value)
-            await interaction.response.send_message('Chia sẻ ngữ cảnh: **' + mode.value + '**. Không quote DM hay tiết lộ chuyện nhạy cảm.', ephemeral=True)
-        self.tree.add_command(privacy_command)
-
-        @app_commands.command(name='link', description='Lấy mã nối Discord với Minecraft; mã chỉ hiện riêng cho bạn')
-        async def link(interaction: discord.Interaction, server: str=''):
-            code = self.engine.identity.issue(interaction.user.id, server)
-            await interaction.response.send_message('Login Minecraft rồi nhập `/kei link ' + code + '`. Mã dùng một lần, hết hạn sau 10 phút. Link không tự cấp quyền server mới.', ephemeral=True)
-        self.tree.add_command(link)
-
-        @app_commands.command(name='unlink', description='Gỡ link Minecraft và quyền copilot kế thừa từ Discord')
-        async def unlink(interaction: discord.Interaction, server: str=''):
-            count = self.engine.identity.unlink(interaction.user.id, server or None)
-            await interaction.response.send_message('Đã gỡ ' + str(count) + ' liên kết Minecraft.', ephemeral=True)
-        self.tree.add_command(unlink)
-        memory = app_commands.Group(name='memory', description='Xem hoặc quên memory của chính bạn')
-
-        @memory.command(name='show', description='Xem memory đã lưu, chỉ hiện riêng cho bạn')
-        async def memory_show(interaction: discord.Interaction):
-            person = self.engine.identity.resolve('discord', interaction.user.id)
-            rows = self.store.rows('SELECT id,kind,content FROM kei_memories WHERE person=? AND active=1 ORDER BY at DESC LIMIT 20', (person,))
-            self.store.execute('INSERT OR REPLACE INTO kei_meta VALUES (?,?)', ('memory-view:' + str(interaction.user.id), dumps([r['id'] for r in rows])))
-            from .memory import unpack
-            text = '\n'.join((str(i + 1) + '. ' + r['kind'] + ': ' + unpack(r['content'])['text'][:180] for i, r in enumerate(rows))) or 'Chưa có memory cá nhân đã chọn lưu.'
-            await interaction.response.send_message(text[:1900] + '\nDùng `/memory forget` để quên một mục hoặc cả phạm vi.', ephemeral=True)
-
-        @memory.command(name='forget', description='Quên mục đã xem, hoặc toàn bộ memory trong scope/all')
-        @app_commands.choices(scope=[app_commands.Choice(name=x, value=x) for x in ('current', 'all')])
-        async def memory_forget(interaction: discord.Interaction, scope: app_commands.Choice[str], index: int=0):
-            selected = None
-            if index:
-                saved = self.store.one('SELECT value FROM kei_meta WHERE key=?', ('memory-view:' + str(interaction.user.id),))
-                ids = json.loads(saved['value']) if saved else []
-                if index < 1 or index > len(ids):
-                    await interaction.response.send_message('Dùng /memory show rồi chọn số mục hợp lệ.', ephemeral=True)
-                    return
-                selected = [ids[index - 1]]
-            current = 'dm:' + str(interaction.user.id) if not interaction.guild_id else 'guild:' + str(interaction.guild_id) + ':' + str(interaction.channel_id)
-            self.engine.memory.forget(str(interaction.user.id), None if scope.value == 'all' else current, selected)
-            await interaction.response.send_message('Đã quên dữ liệu và phần dẫn xuất liên quan.', ephemeral=True)
-        self.tree.add_command(memory)
-        servers = app_commands.Group(name='server', description='Xem, kết nối và cấp quyền Minecraft server')
-
-        @servers.command(name='list', description='Xem server và capability bạn được sử dụng')
-        async def server_list(interaction: discord.Interaction):
-            ids = self.engine.assigned(str(interaction.user.id))
-            text = '\n'.join((self.engine.servers[s]['name'] + ' (`' + s + '`): ' + ', '.join(self.engine.tools[s].capabilities()) for s in ids))
-            await interaction.response.send_message(text[:1800] or 'Chưa được assign server; bạn vẫn chat bình thường được.', ephemeral=True)
-
-        @servers.command(name='grant', description='Owner server: cấp chat, observe hoặc copilot cho một người')
-        @app_commands.choices(level=[app_commands.Choice(name=x, value=x) for x in ('chat', 'observe', 'copilot')])
-        async def server_grant(interaction: discord.Interaction, server: str, user: discord.User, level: app_commands.Choice[str]):
-            try:
-                self.engine.grant(str(interaction.user.id), str(user.id), server, level.value)
-                text = 'Đã lưu quyền ' + level.value + ' trên ' + server + '.'
-            except Exception as exc:
-                text = str(exc)
-            await interaction.response.send_message(text, ephemeral=True)
-
-        @servers.command(name='connect', description='Owner: kết nối Panel bằng wizard riêng tư')
-        async def server_connect(interaction: discord.Interaction):
-            if str(interaction.user.id) != self.cfg['owner_id'] and (not self.cfg.get('allow_self_service', False)):
-                await interaction.response.send_message('Operator cần bật self-service hoặc thêm server bằng keys-keys server add.', ephemeral=True)
-                return
-            await interaction.response.send_modal(PanelConnect(self))
-        self.tree.add_command(servers)
-
-        @app_commands.command(name='setup', description='Claim owner bằng mã một lần từ terminal khi cài mới')
-        async def claim(interaction: discord.Interaction, code: str):
-            expected = self.cfg.get('owner_claim_hash')
-            valid = expected and hashlib.sha256(code.strip().encode()).hexdigest() == expected and (self.cfg['owner_id'] == '0')
-            if valid:
-                owner = str(interaction.user.id)
-                self.cfg['owner_id'] = owner
-                self.cfg.pop('owner_claim_hash', None)
-                for p in self.cfg['servers']:
-                    if p.get('owners') == ['0']:
-                        p['owners'] = [owner]
-                        self.cfg['assignments'].setdefault(owner, [])
-                        if p['id'] not in self.cfg['assignments'][owner]:
-                            self.cfg['assignments'][owner].append(p['id'])
-                        self.store.execute('INSERT OR IGNORE INTO kei_assignments VALUES (?,?)', (owner, p['id']))
-                save_config(self.cfg, self.cfg['_path'])
-                self.engine.refresh_servers()
-            await interaction.response.send_message('Đã nhận owner. Dùng /server connect để thêm server.' if valid else 'Mã sai, hết hiệu lực hoặc bot đã có owner.', ephemeral=True)
-        self.tree.add_command(claim)
+        # UserExperience registers the complete two-entry menu after construction.
+        # Retain that implementation's helpers rather than parallel slash aliases.
+        for name in RETIRED_COMMANDS:
+            self.tree.remove_command(name)
 
     async def on_interaction(self, interaction):
         if interaction.type == discord.InteractionType.application_command:
@@ -376,19 +274,41 @@ class Kei(LegacyKei):
                 pending['confirmed'] = False
                 self.store.update_task(task['id'], pending=dumps(pending))
                 self.store.queue(task['channel'], '**Approval needed**\n-# This pending change now needs confirmation from the person who started the task.', confirm_task=task['id'])
-        await super().setup_hook()
+        # The v2 hook republishes debug/persona. Retain its recovery and workers,
+        # but register only the public v3 entry points at both startup phases.
+        self.store.recover()
+        await self.publish_commands()
+        self.bg = [asyncio.create_task(loop()) for loop in (
+            self.outbox_loop, self.monitor_loop, self.maintenance,
+            self.task_typing_loop, self.progress_loop)]
+        for task in self.store.rows("SELECT id FROM kei_tasks WHERE status='queued'"):
+            self.engine.launch(task['id'])
+        if hasattr(self.engine, 'reports'):
+            self.engine.reports.recover()
         await self.bridge.start()
         await self.ux.start()
         self.bg.extend([asyncio.create_task(self.sync_commands()), asyncio.create_task(self.social_outbox()), asyncio.create_task(self.social_background()), asyncio.create_task(self.scheduler_loop())])
 
-    async def sync_commands(self):
-        await self.wait_until_ready()
+    async def publish_commands(self):
         try:
             for command in self.tree.get_commands():
-                await self.http.upsert_global_command(self.application_id, command.to_dict(self.tree))
-            LOG.info('SLASH_REGISTRATION_COMPLETE count=%s', len(self.tree.get_commands()))
+                if command.name in PUBLISHED_COMMANDS:
+                    await self.http.upsert_global_command(self.application_id, command.to_dict(self.tree))
+            for command in await self.http.get_global_commands(self.application_id):
+                if command.get('type', 1) == 1 and command['name'] in RETIRED_COMMANDS:
+                    await self.http.delete_global_command(self.application_id, command['id'])
+            # Global entry points only: exact owned IDs, never bulk-sync a guild.
+            for guild in self.guilds:
+                for command in await self.http.get_guild_commands(self.application_id, guild.id):
+                    if command.get('type', 1) == 1 and command['name'] in RETIRED_COMMANDS | PUBLISHED_COMMANDS:
+                        await self.http.delete_guild_command(self.application_id, guild.id, command['id'])
+            LOG.info('SLASH_REGISTRATION_COMPLETE count=2 compact=true')
         except discord.HTTPException as exc:
             LOG.warning('Command registration deferred: %s', type(exc).__name__)
+
+    async def sync_commands(self):
+        await self.wait_until_ready()
+        await self.publish_commands()
 
     async def on_ready(self):
         await super().on_ready()
@@ -420,6 +340,7 @@ class Kei(LegacyKei):
         strong = guild is None or self.user in message.mentions or named or bool(nickname(message.content, manual_names)) or message.content.startswith('kei!')
         direct = guild is None or self.user in message.mentions or bool(nickname(message.content, aliases)) or message.content.startswith('kei!')
         to_other = False
+        ref = None
         if message.reference:
             ref = message.reference.resolved
             if not isinstance(ref, discord.Message):
@@ -464,6 +385,12 @@ class Kei(LegacyKei):
             restricted = not message.channel.permissions_for(guild.default_role).view_channel
             self.store.execute('INSERT OR REPLACE INTO kei_meta VALUES (?,?)', ('scope-visibility:' + scope, 'restricted' if restricted else 'group'))
         self.following[channel, user] = time.time() + 90
+        if ref is not None:
+            retained = self.engine.messenger.selected_source(user,scope,str(ref.id),channel)
+            if retained and not self.store.tombstoned([retained['id']]):
+                confirmed = retained['role'] == 'user' or bool(self.store.one("SELECT a.id FROM kei_social_actions a JOIN kei_delivery_targets t ON t.action=a.id WHERE t.scope=? AND t.actor=? AND a.content=? AND a.status='sent'", (scope, user, retained['content'])))
+                if confirmed:
+                    self.store.execute('INSERT OR REPLACE INTO kei_messenger_selections69 VALUES (?,?,?,?)', (str(message.id), user, scope, retained['id']))
         await super().on_message(message)
         if self.store.one('SELECT id FROM kei_messages WHERE id=?', (str(message.id),)):
             self.store.execute('INSERT OR REPLACE INTO kei_event_meta VALUES (?,?,?,?,?,?,?,?,?)', (str(message.id), 'discord', person, user, '', scope, channel, 1 if strong else 3 if learned else 2 if following else 0, time.time()))
@@ -604,9 +531,65 @@ class Kei(LegacyKei):
     async def rank_notifications(self):
         return
 
+    async def resolve_messenger_recipient(self, query, user, scope, channel):
+        from .messenger_transport import resolve_recipient
+        from .engine import MESSAGE_SOURCES
+        bound = MESSAGE_SOURCES.get()
+        def guard():
+            return bool(bound and bound[0] is self.engine and bound[1] and self.engine.messenger._valid_sources(bound[1]))
+        if not guard():
+            return None
+        destination = await self.destination(str(channel))
+        if not guard():
+            return None
+        result = await resolve_recipient(self, query, user, scope, destination, guard=guard)
+        if result.get('status') == 'resolved':
+            return result
+        return result.get('candidates', []) if result.get('status') == 'ambiguous' else None
+
+    async def deliver_messenger_outbox(self, row):
+        from .messenger_transport import send_messenger, DeliveryUncertain
+        messenger = self.engine.messenger
+        mapping = messenger.mapping_for(row['id'])
+        if not mapping:
+            return False
+        sources = json.loads(mapping['sources'])
+        actor_sources = [s for s in sources if s['user'] == mapping['actor']]
+        if not actor_sources:
+            raise PermissionError('messenger_source_missing')
+        source = actor_sources[-1]
+        meta = self.store.one('SELECT channel FROM kei_event_meta WHERE message=?', (source['id'],))
+        parent = self.store.one('SELECT * FROM kei_handoffs69 WHERE id=?', (mapping['handoff'],))
+        payload = {'handoff': {'requester': mapping['actor'], 'recipient': mapping['recipient'],
+                    'scope': source['scope'], 'channel': meta['channel'] if meta else parent['channel'],
+                    'source_ids': mapping['source_ids']}, 'content': row['content'], 'attachment_ids': mapping['attachment_ids']}
+        try:
+            sent = await send_messenger(self, row, payload, check=lambda: messenger.delivery_current(row['id']),
+                                        authorize=lambda: messenger.delivery_allowed(row['id']))
+        except DeliveryUncertain as exc:
+            if exc.message_id:
+                messenger.sent(row['id'], exc.message_id)
+            raise
+        messenger.sent(row['id'], sent)
+        return True
+
+    def report_messenger_failure(self,row,status):
+        messenger=getattr(self.engine,'messenger',None)
+        if not messenger or not messenger.mapping_for(row['id']):return
+        copy={'failed': 'Tin nhắn chưa gửi được.', 'uncertain': 'Chưa rõ bên kia đã nhận được tin nhắn hay chưa, bạn đừng vội gửi lại kẻo bị trùng nhé.'}
+        if getattr(self,'cfg',{}).get('language','vi')=='en':copy={'failed':'I could not send that message.','uncertain':'I cannot confirm whether that message arrived; please do not resend it yet.'}
+        try:messenger.failure_notice(row['id'],status,copy)
+        except Exception as exc:LOG.warning('Message failure notice deferred (%s)',type(exc).__name__)
+
     async def outbox_loop(self):
         await self.wait_until_ready()
         while not self.is_closed():
+            messenger = getattr(self.engine, 'messenger', None)
+            if messenger:
+                try:
+                    await messenger.tick()
+                except Exception as exc:
+                    LOG.warning('Message release failed (%s)', type(exc).__name__)
             rows = self.store.rows("SELECT * FROM kei_outbox WHERE status='pending' ORDER BY at,rowid LIMIT 15")
             for row in rows:
                 origin = self.store.one('SELECT o.ack FROM kei_task_outbox m JOIN kei_task_origins o ON o.task=m.task WHERE m.outbox=?', (row['id'],))
@@ -616,6 +599,9 @@ class Kei(LegacyKei):
                         continue
                 self.store.execute("UPDATE kei_outbox SET status='sending',attempts=attempts+1 WHERE id=? AND status='pending'", (row['id'],))
                 try:
+                    if messenger and messenger.mapping_for(row['id']):
+                        await Kei.deliver_messenger_outbox(self, row)
+                        continue
                     channel = await self.destination(row['channel'])
                     view = None
                     reference = None
@@ -646,9 +632,19 @@ class Kei(LegacyKei):
                         sent = await channel.send(row['content'], allowed_mentions=discord.AllowedMentions.none(), view=view, **extra)
                     self.store.execute("UPDATE kei_outbox SET status='sent',message=? WHERE id=?", (str(sent.id), row['id']))
                 except (discord.Forbidden, discord.NotFound, PermissionError):
-                    self.store.execute("UPDATE kei_outbox SET status='failed' WHERE id=?", (row['id'],))
+                    if messenger and messenger.mapping_for(row['id']):
+                        messenger.failed(row['id'], 'failed');Kei.report_messenger_failure(self,row,'failed')
+                    else:
+                        self.store.execute("UPDATE kei_outbox SET status='failed' WHERE id=?", (row['id'],))
+                except asyncio.CancelledError:
+                    if messenger and messenger.mapping_for(row['id']):
+                        messenger.failed(row['id'], 'uncertain');Kei.report_messenger_failure(self,row,'uncertain')
+                    raise
                 except Exception as exc:
-                    self.store.execute("UPDATE kei_outbox SET status='uncertain' WHERE id=?", (row['id'],))
+                    if messenger and messenger.mapping_for(row['id']):
+                        messenger.failed(row['id'], 'uncertain');Kei.report_messenger_failure(self,row,'uncertain')
+                    else:
+                        self.store.execute("UPDATE kei_outbox SET status='uncertain' WHERE id=?", (row['id'],))
                     LOG.warning('Outbox delivery uncertain (%s)', type(exc).__name__)
             await asyncio.sleep(0.5 if rows else 1)
 
@@ -872,7 +868,7 @@ class PanelConnect(discord.ui.Modal, title='Kết nối Minecraft Panel'):
                 self.bot.store.execute('INSERT OR REPLACE INTO kei_registered_servers VALUES (?,?,?,?)', (sid, dumps(p), str(event.user.id), time.time()))
                 self.bot.store.execute('INSERT OR REPLACE INTO kei_grants VALUES (?,?,?,?)', (str(event.user.id), sid, 'copilot', str(event.user.id)))
                 self.bot.engine.refresh_servers()
-                await event.response.edit_message(content='Đã kết nối **' + r['name'] + '**. Dùng /server list hoặc nhờ Kei kiểm tra server.', view=None)
+                await event.response.edit_message(content='Đã kết nối **' + r['name'] + '**. Mở /server hoặc nhờ Kei kiểm tra server.', view=None)
             select.callback = picked
             view.add_item(select)
             await interaction.followup.send('Key chỉ lưu riêng trên host. Chọn một server:', view=view, ephemeral=True)

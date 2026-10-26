@@ -3,7 +3,7 @@
 ## What happens by default
 
 - DM, mention, reply or `kei` can address the bot. Open-source trigger names are configurable.
-- Ambient participation is **off**. `/social ambient free` enables the guild; `whitelist`
+- Ambient participation is **off**. the Free participation option in `/settings` enables the guild; `whitelist`
   enables selected channels. Admin permission is required. `off` leaves direct calls working.
 - A response can be a normal line, a short line, 👍, ❤️ or silence. An emoji is not someone
   pressing a nonexistent Continue button.
@@ -17,13 +17,13 @@ their source and context. A nickname candidate is not proof the speaker addresse
 
 | Command | Purpose |
 |---|---|
-| `/persona auto/soft/spicy` | Keep the old style, stronger style, or adapt naturally |
-| `/social dm on/off` | Opt in/out of unsolicited social DMs |
-| `/social timezone Asia/Ho_Chi_Minh` | Quiet hours use your IANA timezone |
-| `/privacy strict/discreet` | Cross-context sharing preference |
-| `/memory show` | Inspect selected memories privately |
-| `/memory forget` | Forget an item, current context, or all personal contexts |
-| `/debug off/minimal/advanced` | Existing job status controls |
+| `/settings` → Persona | Keep the old style, stronger style, or adapt naturally |
+| `/settings` → Proactive DMs | Opt in/out of unsolicited social DMs |
+| `/settings` → Timezone | Quiet hours use your IANA timezone |
+| `/settings` → Privacy | Cross-context sharing preference |
+| `/settings` → Memory | Inspect selected memories privately |
+| `/settings` → Memory → Forget | Forget an item, current context, or all personal contexts |
+| `/settings` → Progress | Existing job status controls |
 
 Social DMs need a reason, are capped at three per day, at least four hours apart, and
 stop after an unanswered initiative. Quiet hours default to 22:00–08:00. Operational

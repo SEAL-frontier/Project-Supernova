@@ -1,6 +1,6 @@
 # Lịch hẹn / Scheduled tasks
 
-Ask Kei in normal chat, or use **`/tasks`** from the settings home screen:
+Ask Kei in normal chat, or use **`/settings` → Schedules**:
 
 ```text
 Kei, mỗi ngày 07:00 kiểm tra TPS server survival, chỉ đọc thôi.
@@ -42,7 +42,7 @@ repeated wall time runs once. Explicit ISO offsets are accepted for exact dates.
   copilot permission; dangerous actions still stop for the existing exact-action
   approval.
 - Work goes through the existing planner, tools, evidence checks and progress.
-  Dispatching a timer does not mean the job succeeded. `/tasks` shows the actual
+  Dispatching a timer does not mean the job succeeded. `/settings` → Schedules shows the actual
   task outcome.
 - A wake-up reminder sends a DM. A Discord send receipt proves delivery only;
   Kei cannot prove someone woke up from a message.

@@ -7,7 +7,7 @@ Start with `keys-keys doctor`. Share the check name and redacted error, not cred
 | No config / blank persona | Run `setup`; edit an existing config with `setup --edit` |
 | Discord token fails | Check Developer Portal token; never paste it publicly |
 | Bot online, ignores text | Enable Message Content Intent, check channel permissions, tag/reply/use configured trigger |
-| Does not randomly join public chat | Correct by default; enable `/social ambient` deliberately |
+| Does not randomly join public chat | Correct by default; enable participation controls in `/settings` deliberately |
 | Provider URL fails only in Docker | `localhost` is the container; use a reachable host/address |
 | Provider HTTP works but tool check fails | Select a model/adapter with actual native tool calling |
 | Vision rejected | Model/adapter may not support images; use JPEG/PNG/WebP within limits and doctor `--vision` |
@@ -24,4 +24,4 @@ Start with `keys-keys doctor`. Share the check name and redacted error, not cred
 | Two replies per message | Stop the duplicate consumer; one token should have one active runtime |
 
 Progress cards describe actual work, not private reasoning. Minimal shows the objective and
-checklist; advanced adds compact real commands/logs. Use `/debug off` if you just want the result.
+checklist; advanced adds compact real commands/logs. Use the Off progress option in `/settings` if you just want the result.

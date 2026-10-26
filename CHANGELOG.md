@@ -1,8 +1,16 @@
 # Changelog
 
-Current public candidate: **4.6.0-rc.2**. Architecture: **Supernova**.
+Current public candidate: **4.6.0-rc.3**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details, persona/prompt contents and runtime test fixtures are not published. Public synthetic regression tests are included separately.
+
+## 4.6.0-rc.3 — Human handoffs and smaller menus
+
+- Add source-bound human message handoffs to the conversation path: explicit named recipients, selected content/attachments, private question replies, time/next-contact/owned-job conditions and unsent-message controls. Retain invisible sent-ID/uncertainty evidence; no ticket/card lifecycle or mandatory delivery announcements.
+- Keep private replies private by default. Recipient lookup, source selection and a friendly tone never grant server or disclosure authority; forgetting and revocation invalidate queued content.
+- Consolidate the public Discord entry points to standalone `/settings` and `/server`. Retain setup/claim, persona, privacy/memory, linking, schedules, connections and permission controls behind the menus. Public `/server` lists Minecraft connections, not private hosted verification.
+- Restore the centered avatar, badges, project explanation, feature overview and setup-oriented README layout. English authored for this public tree; Vietnamese composed by an actual Gemini Flash Low request in the older native style. Keep release changes here instead of making the README an rc2 changelog.
+- Update retired command guidance, portable package version and synthetic public regression coverage. No private deployment policy, persona, conversations or operational telemetry is included.
 
 ## 4.6.0-rc.2 — Public continuity and receipt corrections
 

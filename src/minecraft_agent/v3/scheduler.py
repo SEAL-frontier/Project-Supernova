@@ -298,7 +298,7 @@ class Scheduler:
             (str(owner),),
         )["n"]
         if active >= 50:
-            raise ValueError("Tối đa 50 lịch chưa kết thúc mỗi người; hủy lịch cũ trong /tasks.")
+            raise ValueError("Tối đa 50 lịch chưa kết thúc mỗi người; hủy lịch cũ trong /settings.")
         schedule = validate_schedule(schedule, self.cfg.get("timezone", "Asia/Ho_Chi_Minh"))
         now = time.time()
         due = next_run(schedule, now)
@@ -345,7 +345,7 @@ class Scheduler:
         if row["status"] == "active":
             return row
         if row["status"] != "pending":
-            raise ValueError("Lịch này không chờ xác nhận; mở /tasks để xem.")
+            raise ValueError("Lịch này không chờ xác nhận; mở /settings để xem.")
         if source_message_id is None or str(source_message_id) not in {
             row["request_message"],
             row["ack_message"],
@@ -643,7 +643,7 @@ class Scheduler:
                     )
                     self.db.queue(
                         row["channel"],
-                        "-# Lịch hẹn quá thời gian chờ; chưa xác nhận hoàn tất. Mở /tasks để kiểm tra.",
+                        "-# Lịch hẹn quá thời gian chờ; chưa xác nhận hoàn tất. Mở /settings để kiểm tra.",
                     )
                 elif status == "queued" and (run["lease_until"] or 0) <= now:
                     # Existing task ID is reused; never create a second mutation after a crash.
@@ -803,7 +803,7 @@ class Scheduler:
             }
         elif action in ("update", "pause", "resume", "cancel"):
             if not sid:
-                raise ValueError("Chọn lịch trong /tasks hoặc nêu đúng ID lịch cần sửa.")
+                raise ValueError("Chọn lịch trong /settings hoặc nêu đúng ID lịch cần sửa.")
             if action == "update":
                 patch = {"message_id": request_id}
                 for src, dst in [

@@ -29,7 +29,7 @@ owner and one sentence of persona. Choose **chat** for the first connection.
 For Vietnam use **Asia/Ho_Chi_Minh**; choose another IANA timezone if appropriate.
 
 If you do not know your Discord user ID, leave owner blank. The terminal prints a
-private claim code. Start the bot, then run `/setup code:THE_CODE` in Discord.
+private claim code. Start the bot, then open `/settings` → **Nhận quyền owner** in Discord and enter it in the private form.
 Keep the code private; it gives initial owner access and stops working after a claim.
 
 Wizard hỏi từng bước, tự tạo file trong `data/`. Đừng tự tạo một đống file rỗng nữa.
@@ -50,8 +50,7 @@ docker compose restart keys-keys
 Choose Panel, SSH or bridge. Each is optional. To add a second connector to an existing
 server, use the **same server ID**. Back up `data/` before changing the deployment.
 
-Owner can also use `/server connect` privately in Discord for a Panel API connection,
-then `/server grant` to assign people. Regular players do not need a host account.
+Owner can also open `/server` → **Connect Panel** privately in Discord, then select a connection and open **People & permissions** to assign people. `/settings` → **Cấp / thu hồi quyền** has the same access controls. Only `/server` and `/settings` are published, both without typed options. Regular players do not need a host account.
 
 Details: [connectors](CONNECTORS.md), [Minecraft plugin](MINECRAFT.md),
 [social and memory](SOCIAL.md), [updates](UPGRADING.md), [troubleshooting](TROUBLESHOOTING.md).

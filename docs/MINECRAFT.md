@@ -10,7 +10,7 @@ waiting for a model to finish its sentence.
 3. Run `keys-keys server add --kind bridge` on the bot host. For an existing server, enter its existing ID.
 4. Copy the generated `data/bridge-configs/SERVER/config.yml` to `plugins/KeysKeysBridge/config.yml`.
 5. Restart Minecraft normally. Do not hot reload the plugin.
-6. `keibridge` in the Minecraft console reports connection state. `/server list` in Discord reports bot capabilities.
+6. `keibridge` in the Minecraft console reports connection state. `/server` in Discord reports bot capabilities.
 
 Target: Paper API 1.21.11, including the Leaf deployment used for acceptance. Other versions
 and Folia are not implied by that target; verify compatibility before deployment.
