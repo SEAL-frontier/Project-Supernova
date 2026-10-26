@@ -64,6 +64,7 @@ def engine(tmp_path, monkeypatch):
 
 def test_math_converse_uses_receipts_and_delivers_ordered_real_png(engine):
     bot, db, model = engine
+    db.add_message('dm:200', '200', 'user', 'calculate sqrt(81)+2**3', '301')
     result = asyncio.run(bot.converse('200', 'dm:200', '100', 'calculate sqrt(81)+2**3', ['301']))
     assert result['intent'] == 'chat'
     assert len(model.calls) == 2
@@ -151,6 +152,7 @@ def test_search_card_does_not_swallow_formula_parts(engine):
 def test_formula_failure_is_honest_text_and_not_a_task(engine):
     bot, db, model = engine
     model.decisions = iter([decision(reply_parts=[{'type': 'formula', 'formula': r'\input{secret}'}])])
+    db.add_message('dm:200', '200', 'user', 'formula please', '301')
     asyncio.run(bot.converse('200', 'dm:200', '100', 'formula please', ['301']))
     row = db.one('SELECT * FROM kei_social_actions')
     assert 'chưa có ảnh' in row['content']
@@ -164,6 +166,7 @@ def test_repeated_calculations_do_not_create_duplicate_receipts(engine):
     bot, db, model = engine
     model.decisions = iter([decision(calculations=[{'id': 'sum', 'expression': '1/0'}]),
                             decision(reply='Cannot verify.', calculations=[{'id': 'sum', 'expression': '1/0'}])])
+    db.add_message('dm:200', '200', 'user', 'calculate 1/0', '301')
     asyncio.run(bot.converse('200', 'dm:200', '100', 'calculate 1/0', ['301']))
     assert len(model.calls) == 2
     receipts = [m for m in model.calls[1][0] if 'LOCAL CALCULATOR RECEIPTS' in str(m['content'])]

@@ -1,8 +1,16 @@
 # Changelog
 
-Current public release: **4.6.0**. Architecture: **Supernova**.
+Current public release: **4.6.1**. Architecture: **Supernova**.
 
 2.0.1–2.0.3 were numbered retrospectively from private development sessions. They are change groups, not previously published GitHub tags. The first public repository is this release. Private deployment details, persona/prompt contents and runtime test fixtures are not published. Public synthetic regression tests are included separately.
+
+## 4.6.1
+
+- Project bounded same-scope conversation evidence, reply edges and confirmed sent replies with explicit partial-coverage metadata. Missing, edited or forgotten request evidence is unavailable, not reconstructed from another scope.
+- Send direct names and current dialogue through the existing main response pass, without a length-only classifier. Suppress repeated acknowledgment bursts only after a valid main-model observation in the same bounded run; protect work, control, refusal and awaited answers.
+- Revalidate request evidence and service permission across asynchronous inference/evidence seams. Remove the admission-side fixed acknowledgment reaction.
+- Vary repetitive decorative chat closers locally while preserving literal requests, commands and quantities; formatting does not require another model call. Add numeric-only Decision/repeat telemetry fields.
+- Preserve public commands, dashboard authentication, same-scope worker continuity, permissions and search behavior. Full private status-controller and hosted policy features are not part of this patch.
 
 ## 4.6.0 — Stable public release
 

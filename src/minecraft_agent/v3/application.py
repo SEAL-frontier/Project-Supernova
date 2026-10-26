@@ -360,14 +360,7 @@ class Kei(LegacyKei):
         last = self.store.one("SELECT content FROM kei_messages WHERE scope=? AND user=? AND role='assistant' AND forgotten=0 ORDER BY at DESC LIMIT 1", (scope, user))
         turn_limit = int(self.cfg['social'].get('followup_turn_limit', 4))
         recent_exchange = self.followup_turns.get((channel, user), 0) < turn_limit and self.direct_windows.get((channel, user), 0) > now and (not to_other)
-        if not direct and recent_exchange and low_signal(message.content) and (not self.engine.quiet.active(scope, person)):
-            if self.store.seen(message.id):
-                return
-            self.store.add_message(scope, user, 'user', message.content, str(message.id))
-            self.engine.conversation.queue(channel, str(message.id), 'react', '👍' if message.content.casefold().strip(' .!') in ('ok', 'okay', 'oke', 'ừ', 'yes') else '👀', scope, user, 'reply')
-            self.followup_turns[channel, user] = self.followup_turns.get((channel, user), 0) + 1
-            return
-        following = self.followup_turns.get((channel, user), 0) < turn_limit and self.direct_windows.get((channel, user), 0) > now and followup_allowed(message.content, to_other=to_other, answering=bool(last and '?' in last['content']))
+        following = recent_exchange and (low_signal(message.content) or followup_allowed(message.content, to_other=to_other, answering=bool(last and '?' in last['content'])))
         if not direct and (not to_other) and (message.content.lower().strip(' .!') in ('ừ', 'ừ làm đi', 'ok', 'okay', 'yes', 'làm đi', 'xác nhận', 'đồng ý')):
             following = following or len(self.store.rows("SELECT id FROM kei_tasks WHERE requester=? AND scope=? AND status='waiting'", (user, scope))) == 1
         if not (direct or following):
@@ -394,6 +387,16 @@ class Kei(LegacyKei):
         await super().on_message(message)
         if self.store.one('SELECT id FROM kei_messages WHERE id=?', (str(message.id),)):
             self.store.execute('INSERT OR REPLACE INTO kei_event_meta VALUES (?,?,?,?,?,?,?,?,?)', (str(message.id), 'discord', person, user, '', scope, channel, 1 if strong else 3 if learned else 2 if following else 0, time.time()))
+
+    async def on_raw_message_edit(self, payload):
+        self.engine.conversation.invalidate_interactions(str(payload.message_id))
+
+    async def on_raw_message_delete(self, payload):
+        self.engine.conversation.invalidate_interactions(str(payload.message_id))
+
+    async def on_raw_bulk_message_delete(self, payload):
+        for message_id in payload.message_ids:
+            self.engine.conversation.invalidate_interactions(str(message_id))
 
     async def begin_typing(self, channel, request):
         if str(channel).startswith('mc:'):

@@ -10,7 +10,7 @@
 
 Actually, her problem. Your server. We got the custody arrangement wrong. 😭
 
-![Version](https://img.shields.io/badge/version-4.6.0-EFA5A5?style=flat-square)
+![Version](https://img.shields.io/badge/version-4.6.1-EFA5A5?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-Supernova-aca9e8?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-efa5a5?style=flat-square)](LICENSE)
@@ -49,7 +49,7 @@ the connections the server actually has. The point of opening the source is that
 can run it with your own servers, models and character. We gave Tendou Kei a Minecraft
 server instead of a peaceful afternoon. This may explain a few things.
 
-> **4.6.0 is the stable public release.** Self-hosted behavior still depends on your
+> **4.6.1 is the stable public release.** Self-hosted behavior still depends on your
 > model, connector permissions and configuration. This repository is not a copy of a
 > private hosted bot's deployment or community rules. Version-specific changes belong
 > in the [changelog](CHANGELOG.md), not in the middle of your setup instructions.
@@ -79,6 +79,13 @@ making it hunt for a “template” you just discussed. The handoff is bounded a
 source-checked; it does not grant permission to operate a server. Task cards show the
 saved result, and starting another command clears the previous command's live output—not
 the evidence that an action happened.
+
+Nearby conversation evidence stays in the current channel or DM and carries explicit
+partial-coverage metadata; omitted messages are unknown. Direct names and current dialogue
+use the main response pass. Repeated acknowledgment suppression requires a previously
+accepted observation in the same bounded run, not just a short message. The public build
+retains its existing daily presence behavior; the private full status controller and
+scheduled-data integration are not included.
 
 Math stays in the chat path. A restricted calculator supplies numerical results, and
 local formula rendering can send an actual PNG between text messages. It is not an image
