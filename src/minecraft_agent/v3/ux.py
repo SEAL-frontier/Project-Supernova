@@ -923,21 +923,11 @@ class UserExperience:
         return embed
 
     def register(self):
-        self.bot.tree.remove_command("setup")
+        # Remove only known Kei aliases. Other integrations may share this tree.
+        from .application import RETIRED_COMMANDS, PUBLISHED_COMMANDS
+        for name in RETIRED_COMMANDS | PUBLISHED_COMMANDS:
+            self.bot.tree.remove_command(name)
         self.bot.tree.error(self.command_error)
-
-        @app_commands.command(
-            name="setup",
-            description="Bắt đầu: thiết lập riêng tư, link tài khoản và kết nối Minecraft",
-        )
-        async def setup(interaction: discord.Interaction, code: str = ""):
-            if code:
-                try:
-                    self.claim(interaction.user.id, code)
-                except (ValueError, PermissionError) as exc:
-                    await interaction.response.send_message(str(exc), ephemeral=True)
-                    return
-            await self.home(interaction, setup=True)
 
         @app_commands.command(
             name="settings", description="Tính cách, memory, quyền riêng tư và Minecraft của bạn"
@@ -945,27 +935,13 @@ class UserExperience:
         async def settings(interaction: discord.Interaction):
             await self.home(interaction)
 
-        @app_commands.command(
-            name="tasks", description="Xem, tạo hoặc tạm dừng lịch hẹn của riêng bạn"
-        )
-        async def tasks(interaction: discord.Interaction):
-            await interaction.response.defer(ephemeral=True, thinking=True)
-            user = str(interaction.user.id)
-            scope = (
-                "dm:" + user
-                if not interaction.guild_id
-                else f"guild:{interaction.guild_id}:{interaction.channel_id}"
-            )
-            await interaction.followup.send(
-                embed=tasks_embed(self, user),
-                view=TasksView(self, user, scope, str(interaction.channel_id)),
-                ephemeral=True,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
+        @app_commands.command(name="server", description="Xem các kết nối Minecraft bạn được phép dùng")
+        async def server(interaction: discord.Interaction):
+            from .server_ui import open_server_menu
+            await open_server_menu(self, interaction)
 
-        self.bot.tree.add_command(setup)
         self.bot.tree.add_command(settings)
-        self.bot.tree.add_command(tasks)
+        self.bot.tree.add_command(server)
 
     async def home(self, interaction, setup=False):
         # Acknowledge before loading identity/profile/server data. An unavailable
@@ -1049,6 +1025,9 @@ class SettingsView(discord.ui.View):
             for target,label in (('persona','Cách nói chuyện'),('profile','Chuyện hai người'),('servers','Minecraft'),('admins','Người có quyền'),('tasks','Lịch hẹn')):
                 async def open_page(interaction, target=target):await self.show(interaction,target)
                 self.button(label,open_page)
+            self.button('Bắt đầu thiết lập', self.setup)
+            if str(ux.cfg.get('owner_id')) == '0' and ux.cfg.get('owner_claim_hash'):
+                self.button('Nhận quyền owner', lambda i: i.response.send_modal(OwnerClaimModal(ux, self.user)))
             self.web_button()
         else:
             async def back(interaction):await self.show(interaction,'home')
@@ -1072,6 +1051,7 @@ class SettingsView(discord.ui.View):
             )
             self.choice("Chuyển biến quan hệ ↑ / ↓", "rank_notifications", [(True, "Hiện dòng nhỏ"), (False, "Tắt")])
             self.button("Múi giờ", lambda i: i.response.send_modal(TimezoneModal(ux, user)))
+            self.button('Public participation', self.ambient)
 
         elif page == "privacy":
             # Connection state grows in conversation; it is not a settings game.
@@ -1081,6 +1061,7 @@ class SettingsView(discord.ui.View):
                 [("strict", "Chỉ nơi đã nói"), ("discreet", "Gợi nhắc kín đáo")],
             )
         elif page == "memory":
+            self.button('Forget one saved memory', self.forget_one)
             self.button(
                 "Quên cuộc trò chuyện này", lambda i: self.confirm_forget(i, False), danger=True
             )
@@ -1163,6 +1144,11 @@ class SettingsView(discord.ui.View):
             )
             return
         await interaction.response.send_modal(OAuthSecretModal(self.ux, self.user))
+
+    async def setup(self, interaction):
+        view = SetupView(self.ux, self.user, self.scope)
+        await interaction.response.edit_message(content=None, embed=view.intro(), view=view,
+                                                allowed_mentions=discord.AllowedMentions.none())
 
     async def show(self, interaction, page):
         if page == "tasks":
@@ -1265,6 +1251,31 @@ class SettingsView(discord.ui.View):
             )
         await interaction.followup.send(text, ephemeral=True)
 
+    async def forget_one(self, interaction):
+        from .memory import unpack
+        rows = self.ux.db.rows('SELECT id,content FROM kei_memories WHERE person=? AND active=1 ORDER BY at DESC LIMIT 25', (self.ux.person(self.user),))
+        if not rows:
+            await interaction.response.send_message('No saved memories to remove.', ephemeral=True)
+            return
+        view = discord.ui.View(timeout=120)
+        picker = discord.ui.Select(placeholder='Select one memory to forget', options=[
+            discord.SelectOption(label=unpack(row['content'])['text'][:100] or 'Saved memory', value=row['id']) for row in rows])
+        async def selected(event):
+            if str(event.user.id) != self.user:
+                await event.response.send_message('This memory list belongs to someone else.', ephemeral=True)
+                return
+            ident = picker.values[0]
+            if ident not in {row['id'] for row in rows}:
+                await event.response.send_message('Open your memory list again.', ephemeral=True)
+                return
+            self.ux.engine.memory.forget(self.user, None, [ident])
+            await event.response.edit_message(content='Forgot that memory and its derived data.', view=None,
+                                               allowed_mentions=discord.AllowedMentions.none())
+        picker.callback = selected
+        view.add_item(picker)
+        await interaction.response.send_message('Choose a memory to remove permanently:', view=view,
+                                                ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
     async def confirm_forget(self, interaction, all_scopes):
         view = discord.ui.View(timeout=60)
         button = discord.ui.Button(label="Xác nhận quên", style=discord.ButtonStyle.danger)
@@ -1289,6 +1300,26 @@ class SettingsView(discord.ui.View):
             view=view,
             ephemeral=True,
         )
+
+
+class OwnerClaimModal(discord.ui.Modal, title='Nhận quyền owner'):
+    code = discord.ui.TextInput(label='Mã một lần từ terminal', max_length=128)
+
+    def __init__(self, ux, user):
+        super().__init__()
+        self.ux, self.user = ux, str(user)
+
+    async def on_submit(self, interaction):
+        if str(interaction.user.id) != self.user:
+            await interaction.response.send_message('Mã này phải được nhập từ thiết lập của bạn.', ephemeral=True)
+            return
+        try:
+            self.ux.claim(self.user, str(self.code))
+            text = 'Đã nhận quyền owner. Mở /server hoặc phần Minecraft trong /settings để kết nối server.'
+        except (ValueError, PermissionError) as exc:
+            text = str(exc)
+        await interaction.response.send_message(text, ephemeral=True,
+                                                allowed_mentions=discord.AllowedMentions.none())
 
 
 class SetupView(SettingsView):
@@ -1642,7 +1673,7 @@ class TasksView(discord.ui.View):
         if str(interaction.user.id) == self.user:
             return True
         await interaction.response.send_message(
-            "Lịch này của người khác. Mở /tasks của bạn nhé.", ephemeral=True
+            "Lịch này của người khác. Mở /settings → Lịch hẹn của bạn nhé.", ephemeral=True
         )
         return False
 

@@ -14,7 +14,7 @@ class Wizard:
         self.language = language
 
     def ask(self, key, label, default='', secret=False, required=False):
-        english = {'timezone': 'IANA timezone (Vietnam: Asia/Ho_Chi_Minh)', 'discord_token': 'Discord bot token (hidden)', 'provider_base': 'Provider URL (OpenAI-compatible /v1)', 'provider_key': 'Provider API key (hidden)', 'provider_model': 'Model', 'chat_model': 'Chat model', 'agent_model': 'Agent model', 'owner_id': 'Discord user ID (leave blank to claim with /setup)', 'persona_file': 'Private persona file', 'persona': 'Describe your persona in one sentence', 'connection': 'Start with (chat/panel/ssh/bridge)', 'kind': 'Connector (panel/ssh/bridge)', 'panel_url': 'Panel URL', 'panel_auth': 'Authentication (key/password/session)', 'panel_key': 'Client API key (not a Wings token)', 'panel_username': 'Panel email/account', 'panel_password': 'Panel password (hidden)', 'session_file': 'Authenticated Playwright storage-state file', 'server_index': 'Choose server number', 'server_id': 'Server ID', 'server_name': 'Server name', 'ssh_host': 'SSH host', 'ssh_port': 'SSH port', 'ssh_user': 'SSH account', 'ssh_auth': 'SSH auth (key/password)', 'ssh_password': 'SSH password (hidden)', 'ssh_key': 'Private key path (inside runtime)', 'ssh_volume': 'Server directory (blank to discover)', 'volume_index': 'Choose directory number', 'minecraft_version': 'Minecraft version', 'trust_host_key': 'Verified fingerprint? (yes/no)', 'bridge_port': 'Bot bridge listening port', 'bridge_url': 'Bot WebSocket URL reachable from Minecraft'}
+        english = {'timezone': 'IANA timezone (Vietnam: Asia/Ho_Chi_Minh)', 'discord_token': 'Discord bot token (hidden)', 'provider_base': 'Provider URL (OpenAI-compatible /v1)', 'provider_key': 'Provider API key (hidden)', 'provider_model': 'Model', 'chat_model': 'Chat model', 'agent_model': 'Agent model', 'owner_id': 'Discord user ID (leave blank to claim with /settings)', 'persona_file': 'Private persona file', 'persona': 'Describe your persona in one sentence', 'connection': 'Start with (chat/panel/ssh/bridge)', 'kind': 'Connector (panel/ssh/bridge)', 'panel_url': 'Panel URL', 'panel_auth': 'Authentication (key/password/session)', 'panel_key': 'Client API key (not a Wings token)', 'panel_username': 'Panel email/account', 'panel_password': 'Panel password (hidden)', 'session_file': 'Authenticated Playwright storage-state file', 'server_index': 'Choose server number', 'server_id': 'Server ID', 'server_name': 'Server name', 'ssh_host': 'SSH host', 'ssh_port': 'SSH port', 'ssh_user': 'SSH account', 'ssh_auth': 'SSH auth (key/password)', 'ssh_password': 'SSH password (hidden)', 'ssh_key': 'Private key path (inside runtime)', 'ssh_volume': 'Server directory (blank to discover)', 'volume_index': 'Choose directory number', 'minecraft_version': 'Minecraft version', 'trust_host_key': 'Verified fingerprint? (yes/no)', 'bridge_port': 'Bot bridge listening port', 'bridge_url': 'Bot WebSocket URL reachable from Minecraft'}
         if self.language == 'en' and key in english:
             label = english[key]
         if key in self.answers:
@@ -75,7 +75,7 @@ def setup(w, path='data/config.yaml', edit=False):
         if path.exists() and previous_model == cfg['provider_model']:
             default = cfg.get(role) or default
         cfg[role] = w.ask(role, label, default)
-    owner = w.ask('owner_id', 'Discord user ID (để trống để claim qua /setup)', cfg.get('owner_id', ''))
+    owner = w.ask('owner_id', 'Discord user ID (để trống để claim qua /settings)', cfg.get('owner_id', ''))
     if owner == '0':
         owner = ''
     if owner and (not owner.isdigit()):
@@ -84,7 +84,7 @@ def setup(w, path='data/config.yaml', edit=False):
     if not owner:
         claim = secrets.token_hex(8)
         cfg['owner_claim_hash'] = hashlib.sha256(claim.encode()).hexdigest()
-        print('OWNER CLAIM — giữ riêng / keep private: /setup code:' + claim)
+        print('OWNER CLAIM — giữ riêng / keep private: /settings → Claim bot → code:' + claim)
     persona = Path(w.ask('persona_file', 'Persona file riêng', cfg.get('persona_file', 'data/persona.md')))
     cfg['persona_file'] = str(persona)
     if not persona.exists() or not persona.read_text(encoding='utf-8').strip():
@@ -278,7 +278,7 @@ async def doctor_async(cfg, offline=False):
                     assert r['stdout'] == 'kei-ssh-ready'
                     note(p['id'] + '/ssh', True, 'verified host and authentication')
                 elif kind == 'bridge':
-                    note(p['id'] + '/bridge', None, 'use /server list after bot + plugin start; pairing is not a live handshake')
+                    note(p['id'] + '/bridge', None, 'use /server after bot + plugin start; pairing is not a live handshake')
             except Exception as exc:
                 note(p['id'] + '/' + kind, False, type(exc).__name__ + '; rerun server add or inspect endpoint/credentials')
             finally:

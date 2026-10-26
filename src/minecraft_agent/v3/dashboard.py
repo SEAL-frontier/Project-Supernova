@@ -134,7 +134,7 @@ class Dashboard:
         self.secure = True
         self.status = "disabled"
         self.auth_ready = False
-        self.setup_message = "Web login is not ready: the operator must configure Discord OAuth. You can still use /setup and /settings in Discord."
+        self.setup_message = "Web login is not ready: the operator must configure Discord OAuth. You can still use /settings in Discord."
         self.branding = None
         self.global_live_cache = (0, [])
 
@@ -255,7 +255,7 @@ class Dashboard:
         except Exception as exc:
             self.status = "unavailable:" + type(exc).__name__
             LOG.warning(
-                "Dashboard unavailable (%s); /setup and /settings remain available",
+                "Dashboard unavailable (%s); /settings remain available",
                 type(exc).__name__,
             )
             if self.runner:

@@ -4,10 +4,10 @@ Kei chats, remembers selected moments, and helps operate Minecraft servers **you
 
 ## In Discord: two places to start
 
-1. Run **`/setup`**. The screen is private. Choose how Kei talks, then link Minecraft or connect a server if you need either.
-2. Later, run **`/settings`**. Everything is there: personality, task progress, participation, proactive DMs, privacy, timezone, memories, relationship profile, linked accounts and Minecraft access.
+1. Run **`/settings`** and choose **Bắt đầu thiết lập** for the optional three-step guide. The screen is private. Choose how Kei talks, then link Minecraft or connect a server if you need either.
+2. Run **`/server`** for a private, paginated overview of Minecraft connections you can actually access. Filter, select a connection, inspect its capabilities, test it, choose your DM default, connect a Panel or open permissions. `/settings` keeps personality, task progress, participation, proactive DMs, privacy, timezone, memories, relationship profile, linked accounts and schedules.
 
-Existing commands still work. An operator can still claim a fresh installation with `/setup code:ONE_TIME_CODE`; no code is required for ordinary personal setup.
+These are the only two slash entry points, both without arguments or subcommands. Old slash aliases are retired, not hidden duplicates. To claim a fresh installation, open `/settings` → **Nhận quyền owner** and enter the one-time code printed in your private terminal. No code is needed for ordinary personal setup. The self-hosted server menu does not implement hosted-service verification or community approval.
 
 ### Connect a Minecraft server
 
@@ -32,7 +32,7 @@ Use **revoke** to remove operational access or **unadmin** to remove delegated a
 
 ### Schedule a reminder or a real task
 
-Open `/settings` → **Lịch hẹn & công việc định kỳ**, or use **`/tasks`**. Enter what to do, a time such as `ngày mai 07:00` or `mỗi ngày 07:00`, and your timezone. Choose **alarm** for a reminder, **observe** for server checks or **change** for authorized server work. Server work needs an assigned server; reminders do not.
+Open `/settings` → **Lịch hẹn & công việc định kỳ**. Enter what to do, a time such as `ngày mai 07:00` or `mỗi ngày 07:00`, and your timezone. Choose **alarm** for a reminder, **observe** for server checks or **change** for authorized server work. Server work needs an assigned server; reminders do not.
 
 New schedules stay pending until you press **🕒 Xác nhận lịch** on the private acknowledgement. Discord ephemeral messages cannot receive reactions, so this private button provides the explicit clock confirmation. Editing or resuming a schedule requires confirmation again. You can inspect, edit, pause, resume and cancel only your own schedules. Permissions are checked again when a server task runs; a schedule uses the same current run mode and assignment checks.
 
@@ -40,12 +40,12 @@ The web screen has the same controls. Web-created schedules deliver in your Disc
 
 ## Optional Web UI
 
-The web screen uses the same preferences and access checks as Discord. It is optional; `/setup`, `/settings` and the CLI work while it is disabled or misconfigured.
+The web screen uses the same preferences and access checks as Discord. It is optional; `/settings`, `/server` and the CLI work while it is disabled or misconfigured.
 
 Configure the same Discord application that owns the bot:
 
 1. In the Discord Developer Portal, open **OAuth2** and add the exact callback URL, for example `https://kei.example.com/oauth/callback`.
-2. Add the web configuration below and restart Kei once. The landing page works before OAuth is ready.
+2. Add the web configuration below and restart Kei once. The dashboard shell loads before OAuth is ready; private settings still require sign-in.
 3. As the bot operator, open **`/settings` → Kết nối & chẩn đoán → Bật đăng nhập Web**. Enter the application's Client ID and **OAuth client secret** in the private modal. Kei stores the secret in its private secrets file and restarts only the web listener. The bot remains connected. Then open `https://kei.example.com` and test Discord login.
 
 The OAuth client secret is different from the bot token. The button appears only for the operator, and its authority is checked again on submission. The secret is never returned in a message or a dashboard API response. For terminal deployment instead, put it in the private environment as `DISCORD_CLIENT_SECRET` and use this example:
@@ -95,7 +95,7 @@ OAuth reference: [Discord OAuth2 documentation](https://discord.com/developers/d
 
 ### Make this deployment yours
 
-The silver, soft pink and crimson web theme ships with a small local Kei illustration. It does not fetch an avatar, font or UI library from somebody else's server. The public project defaults are reusable; deployment names and community invites belong in your own private config:
+The public dashboard ships its HTML, CSS and JavaScript locally, without promotional artwork. It does not fetch fonts or a UI library from somebody else's server. The public project defaults are reusable; deployment names and community invites belong in your own private config:
 
 ```yaml
 web:
@@ -111,15 +111,15 @@ web:
 
 Optional `intro` replaces the short introduction. Names and copy are escaped as text. Repository links require HTTPS; `community_url` accepts a real `https://discord.gg/...` or `https://discord.com/invite/...` invite. Leave it empty to hide the community link. There is no default invite to somebody else's server.
 
-The landing page explains what the project is and why it exists before setup. Its conversation examples run locally in the browser; they send no messages or model requests. Once signed in, the same screen opens personal settings, relationship/memory, Minecraft and schedules. Tabs support keyboard navigation, and animation respects reduced-motion preferences.
+The public Web UI is a dashboard, not a promotional landing page or conversation demo. Once signed in, it opens personal settings, relationship/memory, Minecraft and schedules. Tabs support keyboard navigation, and animation respects reduced-motion preferences.
 
-For custom deployments that copy the Python source directly, include `minecraft_agent/v3/web_assets/kei.png` along with the Python modules. Wheels and the supplied Dockerfile package this asset automatically. The image is the existing project artwork; the code's MIT license does not relicense it.
+For source deployments, include the exported `minecraft_agent/v3/web_assets/` dashboard HTML, CSS and JavaScript alongside the Python modules. The public dashboard does not include promotional artwork. Wheels package the exported dashboard assets; the code's MIT license does not relicense character artwork.
 
-When the OAuth app secret or client ID is missing, the landing page remains readable and explains that Discord login is not ready. Login, callbacks and private APIs return 503; there is no anonymous setup or settings access. An invalid public URL or callback prevents the listener starting. Slash-command setup continues working in either case. A successful local HTTP test is not proof that your production Discord OAuth callback has been configured.
+When the OAuth app secret or client ID is missing, the dashboard shell explains that Discord login is not ready. Login, callbacks and private APIs return 503; there is no anonymous setup or settings access. An invalid public URL or callback prevents the listener starting. Slash-command setup continues working in either case. A successful local HTTP test is not proof that your production Discord OAuth callback has been configured.
 
 ## Tiếng Việt: dùng nhanh
 
-**`/setup` để bắt đầu, `/settings` để chỉnh lại.** Không phải học kiến trúc mới nói chuyện được. Chọn tính cách, bật/tắt DM chủ động, đặt `Asia/Ho_Chi_Minh`, xem hoặc quên memory, link Minecraft nếu muốn.
+**`/settings` để bắt đầu hoặc chỉnh lại; `/server` để xem kết nối Minecraft.** Không phải học kiến trúc mới nói chuyện được. Chọn tính cách, bật/tắt DM chủ động, đặt `Asia/Ho_Chi_Minh`, xem hoặc quên memory, link Minecraft nếu muốn.
 
 Muốn Kei quản lý server: owner nối Panel rồi cấp quyền cho từng người. Có nhiều server thì chọn mặc định hoặc gọi rõ tên; Kei không được tự bốc đại server. Rank thân thiết chỉ là ngữ cảnh nói chuyện, không phải vé vào console.
 
@@ -133,7 +133,7 @@ keys-keys doctor
 
 ## Fewer commands, more ordinary words (rc.3)
 
-`/setup` opens three short private steps, with Back/Next and optional Minecraft linking. `/settings` opens direct category buttons plus a selector; each page can return home. The Web dashboard has the same personal controls, a three-step guide and an always-available **Về Kei** / **Góc của bạn** switch.
+`/settings` → **Bắt đầu thiết lập** opens three short private steps, with Back/Next and optional Minecraft linking. `/settings` opens direct category buttons plus a selector; each page can return home. The Web dashboard retains personal controls and a three-step guide, without the old promotional landing-page switch.
 
 Say “Kei, từ giờ gọi mình là anh” or add text in **Trò chuyện → Lời dặn riêng** (also `/settings → Tính cách & tiến độ → Lời dặn riêng`). Clear the field to remove it. Personal instructions are limited to 2,000 characters and are inserted as lower-authority user preferences, never as a system replacement. Operators may set optional `custom_instructions: "..."` in kei.yaml (up to 4,000 characters used). Neither option grants permissions.
 

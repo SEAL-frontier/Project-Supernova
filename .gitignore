@@ -17,6 +17,8 @@ tests/*
 !tests/test_public_continuity.py
 !tests/test_public_progress.py
 !tests/test_public_report_reply.py
+!tests/test_public_commands69.py
+!tests/test_public_messenger69.py
 .venv/
 venv/
 __pycache__/

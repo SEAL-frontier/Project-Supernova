@@ -75,6 +75,10 @@ class Store(LegacyStore):
         if kind != 'silence':
             self.execute('INSERT INTO kei_social_actions VALUES (?,?,?,?,?,?,?)', (uid(), str(channel), str(message or ''), kind, content, 'pending', time.time()))
 
+    def conversation_session_after(self, scope):
+        """No session-reset marker exists in the public baseline."""
+        return None
+
     def tombstoned(self, ids):
         return any((self.one('SELECT source FROM kei_forget_tombstones WHERE source=?', (str(x),)) for x in ids))
 
